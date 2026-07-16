@@ -1,0 +1,38 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n                            SELECT \n                                count(*) as \"total_connections!\",\n                                count(*) FILTER (WHERE state = 'active') as \"active_connections!\",\n                                count(*) FILTER (WHERE state = 'idle') as \"idle_connections!\",\n                                count(*) FILTER (WHERE state = 'idle in transaction') as \"idle_in_transaction!\"\n                            FROM pg_stat_activity \n                            WHERE datname = current_database()\n                            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "total_connections!",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 1,
+        "name": "active_connections!",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 2,
+        "name": "idle_connections!",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 3,
+        "name": "idle_in_transaction!",
+        "type_info": "Int8"
+      }
+    ],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": [
+      null,
+      null,
+      null,
+      null
+    ]
+  },
+  "hash": "6ec5000301c9ed83755f92c8913d6579a2c41f47c85ddab8abb66740595c5b84"
+}

@@ -1,0 +1,28 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT\n                token_holder_count,\n                total_supply\n            FROM token\n            WHERE token_id = $1\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "token_holder_count",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 1,
+        "name": "total_supply",
+        "type_info": "Numeric"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text"
+      ]
+    },
+    "nullable": [
+      false,
+      false
+    ]
+  },
+  "hash": "72d17fd73588d30cb721e437764bb0464a6196a2dae1fa923afc58bb3cea8f1e"
+}
