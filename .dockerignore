@@ -1,0 +1,65 @@
+# Git 관련
+.git/
+.gitignore
+
+# Rust 빌드 산출물
+target/
+
+# 개발 환경 파일
+.env
+.env.local
+.env.*.local
+
+# IDE 설정
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS 파일
+.DS_Store
+Thumbs.db
+
+# 문서
+docs/
+README.md
+LICENSE
+
+# 테스트 파일
+tests/
+benches/
+
+# CI/CD
+.github/
+.gitlab-ci.yml
+.travis.yml
+
+# Docker 관련
+Dockerfile
+docker-compose*.yml
+.dockerignore
+
+# 로그 파일
+*.log
+logs/
+
+# 임시 파일
+tmp/
+temp/
+*.tmp
+*.temp
+
+# 백업 파일
+*.backup
+*.bak
+
+# 개발용 스크립트
+scripts/
+*.sh
+
+# 기타
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*

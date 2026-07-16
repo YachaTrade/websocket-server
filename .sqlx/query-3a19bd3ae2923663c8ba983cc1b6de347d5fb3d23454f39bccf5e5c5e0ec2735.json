@@ -1,0 +1,47 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n                    SELECT price, created_at, block_number, tx_index, log_index\n                    FROM price_history\n                    WHERE token_id = $1 AND created_at < $2\n                    ORDER BY created_at DESC, block_number DESC, tx_index DESC, log_index DESC\n                    LIMIT 1\n                    ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "price",
+        "type_info": "Numeric"
+      },
+      {
+        "ordinal": 1,
+        "name": "created_at",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 2,
+        "name": "block_number",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 3,
+        "name": "tx_index",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 4,
+        "name": "log_index",
+        "type_info": "Int4"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Int8"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "3a19bd3ae2923663c8ba983cc1b6de347d5fb3d23454f39bccf5e5c5e0ec2735"
+}
