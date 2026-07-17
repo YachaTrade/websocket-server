@@ -24,7 +24,7 @@ use tracing::{error, info, instrument, warn};
 
 use crate::{
     client::RpcClient,
-    config::WMON_ADDRESS,
+    config::WETH_ADDRESS,
     db::cache::CacheManager,
     types::stream::{Buy, DexChartUpdate, DexEventType, DexSync, EventType, Sell},
     utils::to_big_decimal,
@@ -356,12 +356,12 @@ async fn parse_log(
                 liquidity,
                 ..
             } = log.log_decode()?.inner.data;
-            let token0_is_mon = token0.eq_ignore_ascii_case(&WMON_ADDRESS);
+            let token0_is_weth = token0.eq_ignore_ascii_case(&WETH_ADDRESS);
             // token은 참조로 사용하고 필요한 곳에서만 clone
-            let token = if token0_is_mon { &token1 } else { &token0 };
+            let token = if token0_is_weth { &token1 } else { &token0 };
 
             // Determine is_buy before resolve_actor (needed for actor resolution)
-            let is_buy_for_resolve = match (token0_is_mon, amount0.is_positive()) {
+            let is_buy_for_resolve = match (token0_is_weth, amount0.is_positive()) {
                 (true, true) => true,   // native in, token out => Buy
                 (true, false) => false,  // native out, token in => Sell
                 (false, true) => false,  // token in, native out => Sell
@@ -376,7 +376,7 @@ async fn parse_log(
                     error!("[DEX] Failed to resolve actor for Swap: {}", e);
                     event_sender.to_string()
                 });
-            let (amount_in, amount_out, is_buy) = match (token0_is_mon, amount0.is_positive()) {
+            let (amount_in, amount_out, is_buy) = match (token0_is_weth, amount0.is_positive()) {
                 (true, true) => {
                     // token0 is native, native in (+), ERC20 out (-) => Buy
                     (
@@ -411,7 +411,7 @@ async fn parse_log(
                 }
             };
 
-            let price = calculate_mon_token_price(to_big_decimal(sqrtPriceX96), token0_is_mon)
+            let price = calculate_mon_token_price(to_big_decimal(sqrtPriceX96), token0_is_weth)
                 .with_scale_round(10, RoundingMode::Up);
 
             let sqrt_price_x96_decimal = to_big_decimal(sqrtPriceX96);
@@ -422,7 +422,7 @@ async fn parse_log(
             // Virtual reserves calculation:
             // reserve0 = L / sqrtPrice
             // reserve1 = L * sqrtPrice
-            let (reserve_native, reserve_token) = if token0_is_mon {
+            let (reserve_native, reserve_token) = if token0_is_weth {
                 // token0 is native (WETH)
                 let reserve0 =
                     (&liquidity_decimal / &sqrt_price).with_scale_round(0, RoundingMode::Down); // native reserve (정수)
@@ -445,9 +445,9 @@ async fn parse_log(
 
             // Reserve 로그 출력 (디버깅용)
             error_log!(
-                "🔍 DEX Reserve: token={}, token0_is_mon={}, reserve_native={}, reserve_token={}, price={}, sqrtPriceX96={}, liquidity={}",
+                "🔍 DEX Reserve: token={}, token0_is_weth={}, reserve_native={}, reserve_token={}, price={}, sqrtPriceX96={}, liquidity={}",
                 token_str,
-                token0_is_mon,
+                token0_is_weth,
                 reserve_native,
                 reserve_token,
                 price,
@@ -559,8 +559,8 @@ async fn parse_log(
             // 공통 함수로 whitelist 체크 및 pool pair 조회
             let (token0, token1) = check_pool_and_get_pair(&pool, &cache_manager).await?;
 
-            let token0_is_mon = token0.eq_ignore_ascii_case(&WMON_ADDRESS);
-            let token = if token0_is_mon { &token1 } else { &token0 };
+            let token0_is_weth = token0.eq_ignore_ascii_case(&WETH_ADDRESS);
+            let token = if token0_is_weth { &token1 } else { &token0 };
             let IUniswapV3Pool::Mint { amount, .. } = match log.log_decode() {
                 Ok(decoded) => decoded.inner.data,
                 Err(e) => {
@@ -588,8 +588,8 @@ async fn parse_log(
             // 공통 함수로 whitelist 체크 및 pool pair 조회
             let (token0, token1) = check_pool_and_get_pair(&pool, &cache_manager).await?;
 
-            let token0_is_mon = token0.eq_ignore_ascii_case(&WMON_ADDRESS);
-            let token = if token0_is_mon { &token1 } else { &token0 };
+            let token0_is_weth = token0.eq_ignore_ascii_case(&WETH_ADDRESS);
+            let token = if token0_is_weth { &token1 } else { &token0 };
             let IUniswapV3Pool::Burn { amount, .. } = match log.log_decode() {
                 Ok(decoded) => decoded.inner.data,
                 Err(e) => {
@@ -616,38 +616,38 @@ async fn parse_log(
 }
 
 /**
- * token0_is_mon 매개변수 설명:
+ * token0_is_weth 매개변수 설명:
  *
  * 이 함수는 항상 mon/token 형태의 가격 비율을 반환합니다.
- * token0_is_mon 매개변수는 token0이 mon(기준 토큰)인지 여부를 나타냅니다.
+ * token0_is_weth 매개변수는 token0이 mon(기준 토큰)인지 여부를 나타냅니다.
  *
  * ETH = MON, USDC = TOKEN이라고 정의할 때:
  *
  * 예시 1: MON/TOKEN 풀
- * - token0가 MON이고 token0_is_mon = true일 때:
+ * - token0가 MON이고 token0_is_weth = true일 때:
  *   => 최종 반환값: 0.0000005 (1 MON당 TOKEN 가격)
  *
  * 예시 2: TOKEN/MON 풀
- * - token0가 TOKEN이고 token0_is_mon = false일 때:
+ * - token0가 TOKEN이고 token0_is_weth = false일 때:
  *   => 최종 반환값: 0.0000005 (1 MON당 TOKEN 가격)
  *
  * 중요: 이 함수는 풀의 구성이나 토큰 순서와 관계없이 항상 mon/token 형태의 가격을 반환합니다.
- * token0_is_mon 매개변수를 통해 어떤 토큰이 mon인지 지정하면, 그에 맞게 가격 비율이 계산됩니다.
+ * token0_is_weth 매개변수를 통해 어떤 토큰이 mon인지 지정하면, 그에 맞게 가격 비율이 계산됩니다.
  *
  * 계산 예시:
  *
  * 입력:
  * - sqrt_price_x96 = 1771845812128583464494622 (Uniswap V3 풀의 실제 값)
- * - token0_is_mon = true (MON이 token0이고 기준 토큰인 경우)
+ * - token0_is_weth = true (MON이 token0이고 기준 토큰인 경우)
  *
  * 계산 과정:
  * 1. sqrt_price_x96 / 2^96 = 0.0000000223638...
  * 2. (sqrt_price_x96 / 2^96)^2 = 0.0000000000005002...
  * 3. 최종 가격 = 약 0.0000005 (1 MON당 TOKEN 가격)
  */
-fn calculate_mon_token_price(sqrt_price_x96: BigDecimal, token0_is_mon: bool) -> BigDecimal {
+fn calculate_mon_token_price(sqrt_price_x96: BigDecimal, token0_is_weth: bool) -> BigDecimal {
     // 전역 상수 TWO_96 사용 (매번 생성하지 않음)
-    if token0_is_mon {
+    if token0_is_weth {
         // price = (2^96 / sqrtP)^2
         let ratio = crate::config::TWO_96.clone() / &sqrt_price_x96;
         let price_ratio = &ratio * &ratio;

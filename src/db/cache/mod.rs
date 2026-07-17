@@ -23,7 +23,7 @@ use rand::Rng;
 use tracing::{debug, error, info, warn};
 
 use crate::{
-    config::{V2_BURN_VAULT_ADDRESS, V2_GIFT_VAULT_ADDRESS, WMON_ADDRESS},
+    config::{V2_BURN_VAULT_ADDRESS, V2_GIFT_VAULT_ADDRESS, WETH_ADDRESS},
     db::{
         local_store::{LocalStore, TokenMarketData},
         postgres::PostgresDatabase,
@@ -374,7 +374,7 @@ impl CacheManager {
         let backoff_base = 500; // 기본 대기 시간 (밀리초)
 
         while retry_count < max_retries {
-            // PostgreSQL 쿼리 실행 — V2: quoteToken이 WMON이 아닐 수 있으므로
+            // PostgreSQL 쿼리 실행 — V2: quoteToken이 WETH이 아닐 수 있으므로
             // market 테이블의 quote_id를 함께 가져와서 (token_id, quote_id) 페어로 복원
             let query = r#"SELECT token_id, quote_id FROM market WHERE pool_id = $1"#;
             match measure_postgres!(
@@ -392,8 +392,8 @@ impl CacheManager {
                     );
 
                     // 유니스왑 방식으로 token0, token1 정렬 (주소값 비교).
-                    // V1처럼 WMON으로 강제 fallback하지 않음 — V2 non-WMON quote
-                    // 토큰의 경우 (WMON, token_id)로 만들면 on-chain pool의 실제
+                    // V1처럼 WETH으로 강제 fallback하지 않음 — V2 non-WETH quote
+                    // 토큰의 경우 (WETH, token_id)로 만들면 on-chain pool의 실제
                     // (token0, token1)과 어긋나서 reserve/amount 해석이 뒤집힘.
                     let (token0, token1) =
                         if quote_id.to_lowercase() < token_id.to_lowercase() {
@@ -1132,12 +1132,12 @@ impl CacheManager {
         }
     }
 
-    /// 로컬 캐시에서 토큰의 quote_id를 조회. 없으면 WMON fallback.
+    /// 로컬 캐시에서 토큰의 quote_id를 조회. 없으면 WETH fallback.
     pub fn get_market_quote_id(&self, token_id: &str) -> String {
         self.local_store
             .get_market(token_id)
             .map(|m| m.quote_info.quote_id.clone())
-            .unwrap_or_else(|| WMON_ADDRESS.clone())
+            .unwrap_or_else(|| WETH_ADDRESS.clone())
     }
 
     /// quote별 price 캐시 최대 엔트리 수. 초과 시 오래된 블록(하위 절반) 자동 정리.
@@ -1250,8 +1250,8 @@ impl CacheManager {
         let backoff_base = 100;
 
         // V2 스키마: price PK가 (quote_id, block_number) 복합키로 바뀌었으므로
-        // 이 서비스가 사용하는 기본 quote(WMON) 기준으로 최신가를 조회한다.
-        let quote_id = crate::config::WMON_ADDRESS.as_str();
+        // 이 서비스가 사용하는 기본 quote(WETH) 기준으로 최신가를 조회한다.
+        let quote_id = crate::config::WETH_ADDRESS.as_str();
 
         while retry_count < max_retries {
             let query = r#"
@@ -1611,15 +1611,15 @@ impl CacheManager {
 
             // V2 스키마: price PK가 (quote_id, block_number)로 바뀌었으므로
             // 해당 token market의 quote_id 기준으로 historical quote/USD를 매칭한다.
-            // WMON으로 고정하면 non-WMON quote 토큰의 USD open이 잘못 복원된다.
+            // WETH으로 고정하면 non-WETH quote 토큰의 USD open이 잘못 복원된다.
             let quote_id = match self.get_market_info(token_id).await {
                 Ok(market) => market.quote_info.quote_id,
                 Err(e) => {
                     warn!(
-                        "Failed to resolve quote_id for chart history token={}, falling back to WMON: {}",
+                        "Failed to resolve quote_id for chart history token={}, falling back to WETH: {}",
                         token_id, e
                     );
-                    crate::config::WMON_ADDRESS.clone()
+                    crate::config::WETH_ADDRESS.clone()
                 }
             };
             let price_query = r#"
@@ -2151,7 +2151,7 @@ impl CacheManager {
 
     /// Buy 이벤트 처리 - Redis Sorted Set에 swap 데이터 저장
     pub async fn update_metrics_on_buy(&self, buy: &Buy) -> Result<()> {
-        // market에서 quote_id 조회 (없으면 WMON fallback)
+        // market에서 quote_id 조회 (없으면 WETH fallback)
         let quote_id = self.get_market_quote_id(&buy.token);
         self.update_metrics_on_swap(
             &buy.token,

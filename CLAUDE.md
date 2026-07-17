@@ -10,52 +10,30 @@ Fan + Pandora. AI influencer platform — Instagram-style unified account model 
 
 - Coverage target: **80%+** (unit + integration + E2E as appropriate).
 - Pre-commit: `superpowers:verification-before-completion` — run the narrowest `cargo test` scope that covers the change. Strategy lives in `docs/backend/testing-strategy.md`.
-- Role split under model routing (next section): **the Worker (Opus) writes the tests and the implementation; a dispatched code-review subagent reviews the diff; the Advisor adjudicates findings and runs the tests itself.** The TDD discipline itself (RED before GREEN) is unchanged.
+- Role split under model routing (next section): **the executor (Codex, dispatched via codex-rescue) writes the tests and the implementation; a dispatched code-review subagent reviews the diff; the orchestrator adjudicates findings and runs the tests itself.** The TDD discipline itself (RED before GREEN) is unchanged.
 
 This rule overrides every other workflow rule in this file.
 
-## 🔴 Absolute rule — Model routing (Advisor / Worker)
+## 🔴 Absolute rule — Model routing (Fable-GPT: orchestrator / executor)
 
-The orchestrating session — whatever model it runs on — is the **Advisor**. Its job is judgment, not implementation labor: it does not write or edit production code or tests itself, except for trivial finishing touches (see Boundaries).
+Model routing follows the machine-global Fable-GPT rule in `~/.claude/CLAUDE.md` (SSOT since 2026-07-17); this replaces the previous Advisor/Worker routing. In short: **Fable 5 orchestrates** — planning, repo understanding, architecture decisions, task decomposition, final review; **Codex (GPT-5.6) executes** — heavy implementation, debugging, test fixing, refactoring, multi-file edits — delegated via `/codex:rescue` (Sol medium daily driver · Sol extra high for hard reasoning · Terra/Luna for locked-plan execution). Keep Codex tasks focused and specific; inspect Codex output yourself before accepting it. The executor-side contract lives in `~/.codex/AGENTS.md`.
 
-**The Advisor (you, the main session) does directly:**
-- Requirements analysis, task decomposition, design decisions.
-- Writing task briefs for the Worker.
-- Verifying results: dispatch the code-review subagent (see below), adjudicate its findings, and run the tests yourself.
-- Final verification, git commits, branch docs, `chang.md`/`complete.md` lifecycle, PR authoring, reporting to the user — mechanical execution/record-keeping of decisions already made, not a delegated implementation role.
-
-**Delegated to the Worker (Opus subagent):**
-- All implementation labor — writing and editing code, writing tests, everything.
-- Dispatch via the Agent tool with `model: "opus"`.
-- Independent tasks are dispatched in parallel.
-
-**Code review is ALWAYS a subagent (2026-07-05 revision):**
-- Every code-diff review — task-level and whole-PR — is dispatched to a dedicated code-review subagent (Agent tool, `model: "opus"`, fresh context). Never reviewed solely by the Advisor inline, and never by the Worker that wrote the diff.
-- The review dispatch carries: the diff handed as a file (not pasted), the task brief/plan, the binding constraints and named risks, and asks for severity-graded findings (`[P1]`/`[P2]`/`[P3]`).
-- The Advisor adjudicates the findings and still runs the covering tests itself — the reviewer's report plus green tests form the gate; neither alone is sufficient.
-
-**Brief requirements** — write the brief so the Worker never has to re-discover what you already know:
-- Carry the context you (the Advisor) already gathered.
-- Include file paths, project conventions, known pitfalls (e.g. the `RUSTC_WRAPPER=` prefix required on every cargo/git invocation — sccache breaks in this sandbox otherwise; do not modify a test file/fixture/snapshot/seed/mock without explicit authorization in the brief), and completion criteria (which tests must pass).
-- State the filesystem boundary: the Worker must not read `~/.claude/`, `~/.agents/`, `.claude/`, or `agents/`.
-
-**Boundaries:**
-- Do not take the Worker's completion report at face value. Gate on the dispatched review's findings plus tests you ran yourself before approving.
-- A failed verification goes back to the Worker as a fix brief. Direct fixes by the Advisor are allowed only for trivial finishing touches.
-- Work where delegation overhead exceeds the task itself (e.g. a one- or two-line fix) may be done directly by the Advisor.
+**Retained guards:**
+- Every code-diff review — task-level and whole-PR — still goes to a dispatched code-review subagent (fresh context, never the executor that wrote the diff); see the pre-PR rule below.
+- Executors must not read `~/.claude/`, `~/.agents/`, `.claude/`, or `agents/`.
 
 ## 🔴 Absolute rule — Subagent code review before every PR
 
-**Every diff is code-reviewed by a dispatched review subagent before opening/merging a PR — the Worker's own report is never the gate (self-attestation is not a gate), and the Advisor signing off alone inline is not a gate either (2026-07-05 revision: code review is ALWAYS a subagent dispatch).**
+**Every diff is code-reviewed by a dispatched review subagent before opening/merging a PR — the executor's own report is never the gate (self-attestation is not a gate), and the orchestrator signing off alone inline is not a gate either (2026-07-05 revision: code review is ALWAYS a subagent dispatch).**
 
-Procedure: dispatch a code-review subagent (Opus, fresh context — not the Worker that wrote the diff) on the FULL diff (`git diff origin/backend...HEAD`), handed as a file, together with the plan/brief and named risks. It reviews hunk by hunk — correctness, safety boundaries, test-intent (Rule 9), conventions — and returns severity-graded findings (`[P1]`/`[P2]`/`[P3]`). The Advisor adjudicates the findings and runs (or re-runs) the *whole* covering test suite itself, not just the changed files' tests (a routing/contract change can break far-away tests). **Record the reviewer's verdict + findings and the Advisor's adjudication in the PR body's 리뷰 이력 section and the branch concept doc.** A PR with no written review record does not count as reviewed.
+Procedure: dispatch a code-review subagent (fresh context — not the executor that wrote the diff) on the FULL diff (`git diff origin/backend...HEAD`), handed as a file, together with the plan/brief and named risks. It reviews hunk by hunk — correctness, safety boundaries, test-intent (Rule 9), conventions — and returns severity-graded findings (`[P1]`/`[P2]`/`[P3]`). The orchestrator adjudicates the findings and runs (or re-runs) the *whole* covering test suite itself, not just the changed files' tests (a routing/contract change can break far-away tests). **Record the reviewer's verdict + findings and the orchestrator's adjudication in the PR body's 리뷰 이력 section and the branch concept doc.** A PR with no written review record does not count as reviewed.
 
 A `[P1]`/CRITICAL finding = GATE FAIL = do not open/merge the PR until fixed.
 
-- Fix trivial findings yourself; send anything larger back to the Worker as a fix brief (per the Model routing Boundaries above), then re-dispatch the reviewer on the amended diff.
+- Fix trivial findings yourself; send anything larger back to the executor as a fix brief, then re-dispatch the reviewer on the amended diff.
 - Do not run the gstack `/review` skill on the same diff twice.
 
-Specs/design docs/written plans before they move to implementation remain **Advisor-direct** verification (the always-subagent rule above covers CODE diffs): the Advisor reads and verifies them itself.
+Specs/design docs/written plans before they move to implementation remain **orchestrator-direct** verification (the always-subagent rule above covers CODE diffs): the orchestrator reads and verifies them itself.
 
 Re-verification before merge is NOT mandatory for every incremental commit landing on an open PR — judge case-by-case.
 

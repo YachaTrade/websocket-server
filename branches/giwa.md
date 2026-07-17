@@ -36,4 +36,4 @@ v2 bonding curve + v1 dex(Uniswap V3) 조합으로 스트림을 재구성하고,
 배포 전 체크리스트 (코드 밖):
 - giwa RPC 3개 endpoint + WS `eth_subscribe("logs")` 지원 확인
 - observer giwa 브랜치: market_type `CURVE`/`DEX`, Pyth LAG 3s / BUCKET 10s 일치 확인
-- env: `V2_BONDING_CURVE`, `V1_DEX_FACTORY`, `WMON`(giwa wrapped native), quote_token 테이블 Pyth feed ID
+- env: `V2_BONDING_CURVE`, `V1_DEX_FACTORY`, `WETH`(giwa wrapped native), quote_token 테이블 Pyth feed ID

@@ -13,7 +13,7 @@ use std::{fmt, sync::Arc};
 use tokio::sync::{Mutex, OnceCell};
 
 use crate::{
-    config::{CHANNEL_SIZE, DECIMALS, WMON_ADDRESS},
+    config::{CHANNEL_SIZE, DECIMALS, WETH_ADDRESS},
     db::cache::CacheManager,
     metrics::{
         monitored_broadcast_channel, monitored_channel, MonitoredBroadcastReceiver,
@@ -127,16 +127,16 @@ impl SwapEventProducer {
                 let block_number = buy.block_number as i64;
                 let quote_id = match cache_manager.get_market_info(&buy.token).await {
                     Ok(market) => market.quote_info.quote_id,
-                    Err(_) => WMON_ADDRESS.clone(),
+                    Err(_) => WETH_ADDRESS.clone(),
                 };
                 let quote_price = cache_manager
                     .get_quote_usd_price(&quote_id, block_number)
                     .await;
-                let native_price = if quote_id.eq_ignore_ascii_case(&WMON_ADDRESS) {
+                let native_price = if quote_id.eq_ignore_ascii_case(&WETH_ADDRESS) {
                     quote_price.clone()
                 } else {
                     cache_manager
-                        .get_quote_usd_price(&WMON_ADDRESS, block_number)
+                        .get_quote_usd_price(&WETH_ADDRESS, block_number)
                         .await
                 };
 
@@ -174,16 +174,16 @@ impl SwapEventProducer {
                 let block_number = sell.block_number as i64;
                 let quote_id = match cache_manager.get_market_info(&sell.token).await {
                     Ok(market) => market.quote_info.quote_id,
-                    Err(_) => WMON_ADDRESS.clone(),
+                    Err(_) => WETH_ADDRESS.clone(),
                 };
                 let quote_price = cache_manager
                     .get_quote_usd_price(&quote_id, block_number)
                     .await;
-                let native_price = if quote_id.eq_ignore_ascii_case(&WMON_ADDRESS) {
+                let native_price = if quote_id.eq_ignore_ascii_case(&WETH_ADDRESS) {
                     quote_price.clone()
                 } else {
                     cache_manager
-                        .get_quote_usd_price(&WMON_ADDRESS, block_number)
+                        .get_quote_usd_price(&WETH_ADDRESS, block_number)
                         .await
                 };
 
@@ -242,16 +242,16 @@ impl SwapEventProducer {
                 let block_number = buy.block_number as i64;
                 let quote_id = match cache_manager.get_market_info(&buy.token).await {
                     Ok(market) => market.quote_info.quote_id,
-                    Err(_) => WMON_ADDRESS.clone(),
+                    Err(_) => WETH_ADDRESS.clone(),
                 };
                 let quote_price = cache_manager
                     .get_quote_usd_price(&quote_id, block_number)
                     .await;
-                let native_price = if quote_id.eq_ignore_ascii_case(&WMON_ADDRESS) {
+                let native_price = if quote_id.eq_ignore_ascii_case(&WETH_ADDRESS) {
                     quote_price.clone()
                 } else {
                     cache_manager
-                        .get_quote_usd_price(&WMON_ADDRESS, block_number)
+                        .get_quote_usd_price(&WETH_ADDRESS, block_number)
                         .await
                 };
 
@@ -293,16 +293,16 @@ impl SwapEventProducer {
                 let block_number = sell.block_number as i64;
                 let quote_id = match cache_manager.get_market_info(&sell.token).await {
                     Ok(market) => market.quote_info.quote_id,
-                    Err(_) => WMON_ADDRESS.clone(),
+                    Err(_) => WETH_ADDRESS.clone(),
                 };
                 let quote_price = cache_manager
                     .get_quote_usd_price(&quote_id, block_number)
                     .await;
-                let native_price = if quote_id.eq_ignore_ascii_case(&WMON_ADDRESS) {
+                let native_price = if quote_id.eq_ignore_ascii_case(&WETH_ADDRESS) {
                     quote_price.clone()
                 } else {
                     cache_manager
-                        .get_quote_usd_price(&WMON_ADDRESS, block_number)
+                        .get_quote_usd_price(&WETH_ADDRESS, block_number)
                         .await
                 };
 

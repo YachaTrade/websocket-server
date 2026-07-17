@@ -48,7 +48,7 @@ pub fn redis_key_prefix() -> &'static str {
 lazy_static! {
     pub static ref V1_DEX_FACTORY_ADDRESS: String =
         env::var("V1_DEX_FACTORY").expect("V1_DEX_FACTORY must be set");
-    pub static ref WMON_ADDRESS: String = env::var("WMON").expect("WMON must be set");
+    pub static ref WETH_ADDRESS: String = env::var("WETH").expect("WETH must be set");
 }
 
 // V2 컨트랙트 주소

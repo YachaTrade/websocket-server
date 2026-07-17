@@ -423,7 +423,7 @@ async fn parse_log(
                     .to_plain_string();
 
                 // Curve: MarketType::Curve, market_id = V2_BONDING_CURVE_ADDRESS
-                // V2는 quoteToken이 WMON이 아닐 수 있으므로 DB에서 QuoteInfo 조회
+                // V2는 quoteToken이 WETH이 아닐 수 있으므로 DB에서 QuoteInfo 조회
                 // fee_config도 함께 조회 (V2 전용)
                 let quote_token_str = quoteToken.to_string();
                 let token_str_for_fee = token.to_string();
@@ -465,7 +465,7 @@ async fn parse_log(
                 // 모든 캐시 작업을 병렬로 실행
                 // V2 Create에서는 pair 화이트리스트도 함께 등록
                 // V2 Create: quoteToken과 token으로 token0/token1 결정
-                // V2에서는 quoteToken이 WMON이 아닐 수도 있으므로 quoteToken 주소로 정렬
+                // V2에서는 quoteToken이 WETH이 아닐 수도 있으므로 quoteToken 주소로 정렬
                 let (pool_token0, pool_token1) =
                     if quoteToken.to_string().to_lowercase() < token_str.to_lowercase() {
                         (quoteToken.to_string(), token_str.clone())
@@ -681,7 +681,7 @@ async fn parse_log(
 
             let token = token.to_string();
 
-            // V2: quote는 반드시 native(WMON)가 아닐 수 있음
+            // V2: quote는 반드시 native(WETH)가 아닐 수 있음
             // CurveSync 필드명은 V1 호환을 위해 `native`로 유지하지만, 의미상 quote 리저브
             let virtual_quote = to_big_decimal(virtualQuoteReserve);
             let virtual_token = to_big_decimal(virtualTokenReserve);
@@ -729,9 +729,9 @@ async fn parse_log(
             let token = token.to_string();
             let pool = pair.to_string();
 
-            // V2에서는 quoteToken이 WMON이 아닐 수 있으므로 market_info에서 quote_id 조회.
-            // 조회 실패 시 WMON으로 fallback하지 않음 — non-WMON quote 토큰의 경우
-            // pool_pair가 (WMON, token)으로 잘못 등록되어 on-chain pool의 실제
+            // V2에서는 quoteToken이 WETH이 아닐 수 있으므로 market_info에서 quote_id 조회.
+            // 조회 실패 시 WETH으로 fallback하지 않음 — non-WETH quote 토큰의 경우
+            // pool_pair가 (WETH, token)으로 잘못 등록되어 on-chain pool의 실제
             // (token0, token1)과 어긋남. 이후 모든 PAIR 이벤트의 reserve/amount
             // 해석이 뒤집힘.
             //

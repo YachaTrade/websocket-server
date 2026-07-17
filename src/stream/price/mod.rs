@@ -24,7 +24,7 @@ lazy_static! {
     ));
 
     /// Quote token 가격 매핑 (quote_address → USD 가격)
-    /// WMON이 아닌 quote token의 가격을 저장
+    /// WETH이 아닌 quote token의 가격을 저장
     /// register_quote_token()으로 등록하면 자동으로 주기적 업데이트됨
     pub static ref QUOTE_PRICES: Arc<DashMap<String, BigDecimal>> = Arc::new(DashMap::new());
 
@@ -61,11 +61,11 @@ pub async fn get_native_price() -> BigDecimal {
 }
 
 /// Quote token 가격 조회
-/// WMON이면 native_price 반환, 아니면 QUOTE_PRICES에서 조회
+/// WETH이면 native_price 반환, 아니면 QUOTE_PRICES에서 조회
 /// 등록되지 않은 quote token이면 native_price를 fallback으로 반환
 pub async fn get_quote_price(quote_id: &str) -> BigDecimal {
-    let wmon = crate::config::WMON_ADDRESS.as_str();
-    if quote_id.eq_ignore_ascii_case(wmon) {
+    let weth = crate::config::WETH_ADDRESS.as_str();
+    if quote_id.eq_ignore_ascii_case(weth) {
         return get_native_price().await;
     }
 

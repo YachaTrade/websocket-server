@@ -83,7 +83,7 @@ pub struct FeeInfo {
 pub struct MarketInfo {
     pub market_type: MarketType,
     pub token_id: String,
-    /// Quote token 정보 (V1: WMON, V2: quoteToken - WMON이 아닐 수 있음)
+    /// Quote token 정보 (V1: WETH, V2: quoteToken - WETH이 아닐 수 있음)
     pub quote_info: QuoteInfo,
     pub market_id: String,
     pub reserve_native: String,
