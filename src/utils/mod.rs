@@ -12,7 +12,7 @@ pub mod retry;
 ///
 /// 최소 금액 = quote 토큰 1개의 10%(0.1) = `0.1 × 10^quote_decimals` (raw 기준).
 /// 예) 18 decimals → 1e17, 6 decimals → 1e5. 임계값을 quote_decimals로 스케일하므로
-/// WMON(18)이 아닌 quote 토큰 마켓에서도 정상 거래가 잘못 차단되지 않는다.
+/// WETH(18)이 아닌 quote 토큰 마켓에서도 정상 거래가 잘못 차단되지 않는다.
 /// buy 는 amount_in, sell 은 amount_out 이 quote 측 금액이다.
 pub fn meets_order_latest_trade_min_amount(amount: &BigDecimal, quote_decimals: i32) -> bool {
     // 0.1 × 10^decimals == 10^(decimals - 1)

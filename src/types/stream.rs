@@ -211,7 +211,7 @@ pub struct CreateCurve {
     pub block_timestamp: u64,
     pub log_index: u64,
     pub transaction_index: u64,
-    /// quote token 주소 (V1: WMON, V2: quoteToken)
+    /// quote token 주소 (V1: WETH, V2: quoteToken)
     pub quote_token: String,
     /// pair 주소 (V1: None, V2: Create 시 pair 생성)
     pub pair: Option<String>,
