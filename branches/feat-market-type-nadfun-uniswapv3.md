@@ -13,4 +13,4 @@ observer가 DB `market_type` 저장 값을 `CURVE`→`NADFUN`, `DEX`→`UNISWAPV
 
 ## Outcome
 
-- (머지 시 작성)
+- 2026-07-20 `main`에 로컬 merge (no-squash). 핵심 커밋 `cf556f3`. 검증: cargo build + `--lib` 47 passed. observer(`d296797`)·api-server(`aa07bbe`)와 값 계약 일치.
