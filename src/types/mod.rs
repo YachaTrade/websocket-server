@@ -53,8 +53,12 @@ pub struct AccountInfo {
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
 pub enum MarketType {
     #[default]
-    Curve, // "CURVE"
-    Dex,   // "DEX"
+    #[serde(rename = "NADFUN")]
+    #[sqlx(rename = "NADFUN")]
+    Curve, // "NADFUN"
+    #[serde(rename = "UNISWAPV3")]
+    #[sqlx(rename = "UNISWAPV3")]
+    Dex, // "UNISWAPV3"
 }
 /// Quote token 메타데이터 (multi-quote 지원)
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
@@ -160,28 +164,37 @@ pub struct SwapInfo {
 mod market_type_tests {
     use super::MarketType;
 
-    // giwa: market_type wire 값은 CURVE/DEX 두 개뿐 (V2 prefix 제거).
+    // giwa: market_type wire 값은 NADFUN/UNISWAPV3 두 개뿐.
     // observer giwa 브랜치가 DB market.market_type에 쓰는 값과 일치해야 한다.
     #[test]
-    fn market_type_serializes_to_curve_and_dex_only() {
+    fn market_type_serializes_to_nadfun_and_uniswapv3_only() {
         assert_eq!(
             serde_json::to_string(&MarketType::Curve).unwrap(),
-            "\"CURVE\""
+            "\"NADFUN\""
         );
-        assert_eq!(serde_json::to_string(&MarketType::Dex).unwrap(), "\"DEX\"");
+        assert_eq!(
+            serde_json::to_string(&MarketType::Dex).unwrap(),
+            "\"UNISWAPV3\""
+        );
     }
 
     #[test]
-    fn market_type_rejects_v2_wire_values() {
+    fn market_type_deserializes_nadfun_and_uniswapv3() {
         assert_eq!(
-            serde_json::from_str::<MarketType>("\"CURVE\"").unwrap(),
+            serde_json::from_str::<MarketType>("\"NADFUN\"").unwrap(),
             MarketType::Curve
         );
         assert_eq!(
-            serde_json::from_str::<MarketType>("\"DEX\"").unwrap(),
+            serde_json::from_str::<MarketType>("\"UNISWAPV3\"").unwrap(),
             MarketType::Dex
         );
-        // V2 값은 giwa에서 더 이상 유효한 wire 값이 아니다
+    }
+
+    #[test]
+    fn market_type_rejects_legacy_wire_values() {
+        // Legacy 값은 giwa에서 더 이상 유효한 wire 값이 아니다.
+        assert!(serde_json::from_str::<MarketType>("\"CURVE\"").is_err());
+        assert!(serde_json::from_str::<MarketType>("\"DEX\"").is_err());
         assert!(serde_json::from_str::<MarketType>("\"V2_CURVE\"").is_err());
         assert!(serde_json::from_str::<MarketType>("\"V2_DEX\"").is_err());
     }
