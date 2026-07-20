@@ -61,8 +61,6 @@ pub struct TokenMarketData {
     /// total_supply, holder_count 마지막 갱신 시각 (unix timestamp)
     #[serde(skip)]
     pub last_stats_update: i64,
-    /// Fee 설정 정보 (fee_config 행이 없으면 None)
-    pub fee_info: Option<crate::types::FeeInfo>,
 }
 
 /// 토큰별 Chart 데이터 (interval별 현재 캔들)

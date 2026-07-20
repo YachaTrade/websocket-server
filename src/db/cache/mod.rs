@@ -1,8 +1,4 @@
-use std::{
-    env,
-    sync::Arc,
-    time::{Duration, Instant},
-};
+use std::{env, sync::Arc};
 
 use crate::{
     error_log,
@@ -52,18 +48,6 @@ pub struct CacheManager {
     price_cache: Arc<DashMap<String, DashMap<i64, BigDecimal>>>,
     /// quote_id → QuoteInfo 메모리 캐시 (quote_token 테이블은 거의 불변)
     quote_info_cache: Arc<DashMap<String, crate::types::QuoteInfo>>,
-    /// token_id → (FeeInfo or None, 캐싱 시각) 메모리 캐시.
-    /// fee_config 행이 거의 변하지 않으므로 Some 결과는 길게 캐싱.
-    /// CreateCurve와 fee_config insert 사이의 race로 None이 잡힌 경우 영구 누락
-    /// 방지를 위해 None 결과는 짧은 TTL로만 캐싱하여 곧 재조회되도록 한다.
-    fee_info_cache: Arc<DashMap<String, (Option<crate::types::FeeInfo>, Instant)>>,
-}
-
-impl CacheManager {
-    /// fee_info 캐시 TTL: Some(존재 확인됨)인 경우 — fee_config는 거의 불변
-    const FEE_INFO_CACHE_TTL_HIT: Duration = Duration::from_secs(3600);
-    /// fee_info 캐시 TTL: None(아직 없음)인 경우 — race로 누락된 경우 빠르게 회복
-    const FEE_INFO_CACHE_TTL_MISS: Duration = Duration::from_secs(30);
 }
 
 impl CacheManager {
@@ -109,7 +93,6 @@ impl CacheManager {
             local_store,
             price_cache: Arc::new(DashMap::new()),
             quote_info_cache: Arc::new(DashMap::new()),
-            fee_info_cache: Arc::new(DashMap::new()),
         })
     }
 
@@ -736,23 +719,6 @@ impl CacheManager {
                 (local_data.total_supply.clone(), local_data.holder_count)
             };
 
-            // fee_info가 None으로 캐시되어 있으면 재조회 시도.
-            // CreateCurve 처리 시점에 indexer의 fee_config insert가 늦어 None으로
-            // 캐시되면 영구히 누락되던 문제 회복용. fee_info_cache가 None TTL 30s
-            // 후에 다시 DB 조회하므로 N초 이내에 자동 회복된다.
-            let fee_info = if local_data.fee_info.is_none() {
-                let refreshed = self.get_fee_info(token_id).await;
-                if refreshed.is_some() {
-                    let to_store = refreshed.clone();
-                    self.local_store.update_market(token_id, |data| {
-                        data.fee_info = to_store.clone();
-                    });
-                }
-                refreshed
-            } else {
-                local_data.fee_info.clone()
-            };
-
             // 로컬 데이터를 MarketInfo로 변환
             // BigDecimal → String 변환은 전부 .normalized().to_plain_string() 로 통일
             // quote_price: 해당 market의 quote asset USD 가격 (DashMap 캐시 or Pyth)
@@ -796,7 +762,6 @@ impl CacheManager {
                 ath_price_quote,
                 holder_count,
                 last_stats_update: current_time,
-                fee_info,
             };
             return Ok(market_info);
         }
@@ -826,10 +791,6 @@ impl CacheManager {
             quote_symbol: String,
             quote_decimals: i32,
             quote_image_uri: String,
-            // fee_config LEFT JOIN 결과
-            fee_creator_fee_rate: Option<i16>,
-            fee_curve_protocol_fee_rate: Option<i16>,
-            fee_dex_protocol_fee_rate: Option<i16>,
         }
         while retry_count < max_retries {
             // DB 컬럼명은 전부 quote_* 기준
@@ -855,14 +816,10 @@ impl CacheManager {
                     COALESCE(qt.name, '') as quote_name,
                     COALESCE(qt.symbol, '') as quote_symbol,
                     COALESCE(qt.decimals, 18) as quote_decimals,
-                    COALESCE(qt.image_uri, '') as quote_image_uri,
-                    fc.creator_fee_rate as fee_creator_fee_rate,
-                    fc.curve_protocol_fee_rate as fee_curve_protocol_fee_rate,
-                    fc.dex_protocol_fee_rate as fee_dex_protocol_fee_rate
+                    COALESCE(qt.image_uri, '') as quote_image_uri
                 FROM market m
                 JOIN token t ON m.token_id = t.token_id
                 LEFT JOIN quote_token qt ON m.quote_id = qt.quote_id
-                LEFT JOIN fee_config fc ON m.token_id = fc.token_id
                 LEFT JOIN LATERAL (
                     SELECT price
                     FROM price
@@ -895,22 +852,6 @@ impl CacheManager {
                     // 먼저 is_graduated를 계산 (market_type 사용 전)
                     let is_graduated = matches!(row.market_type, MarketType::Dex);
 
-                    // fee_info 구성 (fee_config 테이블에 데이터가 있을 때만)
-                    let fee_info = match (
-                        row.fee_creator_fee_rate,
-                        row.fee_curve_protocol_fee_rate,
-                        row.fee_dex_protocol_fee_rate,
-                    ) {
-                        (Some(creator), Some(curve), Some(dex)) => {
-                            Some(crate::types::FeeInfo {
-                                creator_fee_rate: creator,
-                                curve_protocol_fee_rate: curve,
-                                dex_protocol_fee_rate: dex,
-                            })
-                        }
-                        _ => None,
-                    };
-
                     // 찾은 정보를 로컬 메모리에 캐싱
                     let quote_info = crate::types::QuoteInfo {
                         quote_id: row.quote_id.clone(),
@@ -934,7 +875,6 @@ impl CacheManager {
                         is_graduated,
                         market_type: row.market_type.clone(),
                         last_stats_update: crate::utils::current_unix_timestamp(),
-                        fee_info: fee_info.clone(),
                     };
                     self.local_store.set_market(token_id, local_data);
 
@@ -976,7 +916,6 @@ impl CacheManager {
                         ath_price_quote,
                         holder_count: row.holder_count,
                         last_stats_update: crate::utils::current_unix_timestamp(),
-                        fee_info,
                     };
 
                     return Ok(market_info);
@@ -1054,7 +993,6 @@ impl CacheManager {
             is_graduated: matches!(market_info.market_type, crate::types::MarketType::Dex),
             market_type: market_info.market_type.clone(),
             last_stats_update: crate::utils::current_unix_timestamp(),
-            fee_info: market_info.fee_info.clone(),
         };
 
         self.local_store.set_market(token_id, market_data);
@@ -1726,8 +1664,6 @@ impl CacheManager {
             .get_quote_info(&create_curve.quote_token)
             .await;
 
-        let fee_info = self.get_fee_info(&create_curve.token).await;
-
         // CreateCurve 시점엔 항상 graduated 전이므로 Curve
         let market_type = crate::types::MarketType::Curve;
 
@@ -1746,7 +1682,6 @@ impl CacheManager {
             is_graduated: false,
             market_type,
             last_stats_update: 0, // 다음 요청 시 DB 조회 트리거
-            fee_info,
         };
 
         // LocalStore에 저장
@@ -1950,69 +1885,6 @@ impl CacheManager {
         Ok(())
     }
 
-    /// fee_config 테이블에서 토큰의 수수료 설정 조회
-    ///
-    /// # 캐시 동작
-    /// - `Some` 결과는 `FEE_INFO_CACHE_TTL_HIT` 동안 캐시 (fee_config는 거의 불변)
-    /// - `None` 결과는 `FEE_INFO_CACHE_TTL_MISS` 동안만 캐시. CreateCurve가 indexer의
-    ///   fee_config insert보다 빠르게 처리되어 None으로 잡힌 경우, 짧은 TTL 후 다음
-    ///   호출에서 다시 DB 조회되어 회복된다.
-    ///
-    /// # Arguments
-    /// * `token_id` - 토큰 ID
-    ///
-    /// # Returns
-    /// * `Option<FeeInfo>` - 존재하면 Some(FeeInfo), 없으면 None
-    pub async fn get_fee_info(&self, token_id: &str) -> Option<crate::types::FeeInfo> {
-        // 1. 캐시 확인
-        if let Some(entry) = self.fee_info_cache.get(token_id) {
-            let (cached, cached_at) = entry.value();
-            let ttl = if cached.is_some() {
-                Self::FEE_INFO_CACHE_TTL_HIT
-            } else {
-                Self::FEE_INFO_CACHE_TTL_MISS
-            };
-            if cached_at.elapsed() < ttl {
-                return cached.clone();
-            }
-            // TTL 만료 → fall through하여 재조회
-        }
-
-        // 2. DB 조회
-        let query = r#"
-            SELECT creator_fee_rate, curve_protocol_fee_rate, dex_protocol_fee_rate
-            FROM fee_config
-            WHERE token_id = $1
-        "#;
-
-        let result = match sqlx::query_as::<_, (i16, i16, i16)>(query)
-            .bind(token_id)
-            .fetch_optional(&self.postgres.pool)
-            .await
-        {
-            Ok(Some((creator, curve, dex))) => Some(crate::types::FeeInfo {
-                creator_fee_rate: creator,
-                curve_protocol_fee_rate: curve,
-                dex_protocol_fee_rate: dex,
-            }),
-            Ok(None) => None,
-            Err(e) => {
-                warn!(
-                    "fee_config 조회 실패: token_id={}, error={}",
-                    token_id, e
-                );
-                // 에러는 캐싱하지 않고 즉시 반환 (다음 호출이 곧바로 재시도하도록)
-                return None;
-            }
-        };
-
-        // 3. 캐시 갱신 (Some/None 둘 다 저장하되 TTL이 다름)
-        self.fee_info_cache
-            .insert(token_id.to_string(), (result.clone(), Instant::now()));
-
-        result
-    }
-
     /// Market volume을 증가시킵니다
     ///
     /// # Arguments
@@ -2099,35 +1971,14 @@ impl CacheManager {
             }
         }
 
-        // graduate 시점에 fee_info 재조회 (fee_config 행이 CreateCurve
-        // 처리 시점엔 아직 인덱싱 안 됐을 수 있어 None으로 캐싱된 상태일 수 있음).
-        //
-        // Curve 일 때만 시도하는 건 중복 재조회를 막기 위함 — 이미 Dex면 이 graduate는
-        // 재전달/재처리분이라 캐시가 채워져 있다. 다만 indexer가 먼저 market_type을
-        // DEX로 넘겨버린 뒤 graduate가 도착하면 정작 필요한 재조회를 건너뛴다.
-        // (기존 동작 유지. 실제로 fee_info 누락이 관측되면 이 가드부터 의심할 것)
-        let current_market_type = self
-            .local_store
-            .get_market(&graduate.token)
-            .map(|m| m.market_type);
-        let refreshed_fee_info = if matches!(current_market_type, Some(MarketType::Curve)) {
-            self.get_fee_info(&graduate.token).await
-        } else {
-            None
-        };
-
         // LocalStore의 market 데이터 업데이트:
         // - is_graduated = true, market_id = pool
         // - market_type: Curve → Dex (graduated 후 socket 응답이 여전히
         //   Curve로 내려가던 버그 수정)
-        // - fee_info: 재조회 결과로 갱신 (None이었던 캐시를 채워줌)
         self.local_store.update_market(&graduate.token, |data| {
             data.is_graduated = true;
             data.market_id = graduate.pool.clone();
             data.market_type = MarketType::Dex;
-            if let Some(fee_info) = refreshed_fee_info.clone() {
-                data.fee_info = Some(fee_info);
-            }
         });
 
         debug!(

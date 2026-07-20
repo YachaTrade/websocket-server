@@ -423,13 +423,8 @@ async fn parse_log(
 
                 // Curve: MarketType::Curve, market_id = BONDING_CURVE_ADDRESS
                 // quoteToken이 WETH이 아닐 수 있으므로 DB에서 QuoteInfo 조회
-                // fee_config도 함께 조회
                 let quote_token_str = quoteToken.to_string();
-                let token_str_for_fee = token.to_string();
-                let (quote_info, fee_info) = tokio::join!(
-                    cache_manager.get_quote_info(&quote_token_str),
-                    cache_manager.get_fee_info(&token_str_for_fee)
-                );
+                let quote_info = cache_manager.get_quote_info(&quote_token_str).await;
 
                 let market_info = MarketInfo {
                     market_type: MarketType::Curve,
@@ -454,7 +449,6 @@ async fn parse_log(
                     volume: "0".to_string(),
                     holder_count: 0,      // 초기 생성자 1명
                     last_stats_update: 0, // 초기 생성 시 0
-                    fee_info,             // fee 설정
                 };
 
                 // String 값들을 미리 생성
