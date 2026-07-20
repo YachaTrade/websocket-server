@@ -575,7 +575,6 @@ impl CacheManager {
             is_graduated: bool,
             is_nsfw: bool,
             is_cto: bool,
-            version: crate::types::TokenVersion,
             created_at: i64,
             creator: String,
             creator_nickname: String,
@@ -588,7 +587,6 @@ impl CacheManager {
             return Ok(token_info);
         }
 
-        // PostgreSQL 쿼리 (V2: token.version 컬럼 포함)
         let query = r#"
              SELECT
                 t.token_id,
@@ -604,7 +602,6 @@ impl CacheManager {
                 t.creator,
                 t.is_nsfw,
                 t.is_cto,
-                t.version,
                 COALESCE(ax.x_handle, a.nickname) as creator_nickname,
                 COALESCE(ax.x_image_uri, a.image_uri) as creator_image_uri,
                 a.bio as creator_bio
@@ -645,7 +642,6 @@ impl CacheManager {
                         image_uri: row.creator_image_uri,
                     },
                     is_cto: row.is_cto,
-                    version: row.version,
                 };
                 // 찾은 정보를 Redis에 캐싱
                 if let Err(e) = self.set_token_info(token_id, &token_info).await {
@@ -1730,14 +1726,7 @@ impl CacheManager {
             .get_quote_info(&create_curve.quote_token)
             .await;
 
-        // V2 토큰인 경우 fee_config 조회
-        // (이전엔 pair.is_some() 으로 implicit하게 V1/V2 판별했으나 명시 필드로 전환)
-        let is_v2 = matches!(create_curve.version, crate::types::TokenVersion::V2);
-        let fee_info = if is_v2 {
-            self.get_fee_info(&create_curve.token).await
-        } else {
-            None
-        };
+        let fee_info = self.get_fee_info(&create_curve.token).await;
 
         // CreateCurve 시점엔 항상 graduated 전이므로 Curve
         let market_type = crate::types::MarketType::Curve;

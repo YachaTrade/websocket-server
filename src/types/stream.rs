@@ -215,9 +215,6 @@ pub struct CreateCurve {
     pub quote_token: String,
     /// pair 주소 (V1: None, V2: Create 시 pair 생성)
     pub pair: Option<String>,
-    /// 토큰 버전 — V1/V2 분기에 사용
-    /// (이전엔 pair.is_some()으로 V1/V2 구분했으나 implicit해서 명시 필드로 전환)
-    pub version: crate::types::TokenVersion,
 }
 
 #[derive(Debug, Clone, Serialize)]
