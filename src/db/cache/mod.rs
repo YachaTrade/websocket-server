@@ -23,7 +23,7 @@ use rand::Rng;
 use tracing::{debug, error, info, warn};
 
 use crate::{
-    config::{V2_BURN_VAULT_ADDRESS, V2_GIFT_VAULT_ADDRESS, WETH_ADDRESS},
+    config::{BURN_VAULT_ADDRESS, GIFT_VAULT_ADDRESS, WETH_ADDRESS},
     db::{
         local_store::{LocalStore, TokenMarketData},
         postgres::PostgresDatabase,
@@ -130,7 +130,7 @@ impl CacheManager {
     /// Some(false) → 캐시에 등록 안 된 것으로 알려짐 (negative cache — 신뢰도 낮음)
     /// None        → 캐시에 정보 없음 (cold cache)
     ///
-    /// V2 Curve Buy/Sell처럼 Create와 같은 tx에 동시 emit되는 race 케이스에서,
+    /// Curve Buy/Sell처럼 Create와 같은 tx에 동시 emit되는 race 케이스에서,
     /// Create handler가 LocalStore에 등록할 때까지 짧게 polling할 때 사용.
     /// 일반 whitelist 확인은 `check_white_list_token` 사용.
     pub fn check_white_list_token_local(&self, token: &str) -> Option<bool> {
@@ -304,7 +304,7 @@ impl CacheManager {
         while retry_count < max_retries {
             // PostgreSQL 쿼리 실행
             info!("Checking POOL existence in PostgreSQL: {}", pool);
-            let query = r#"SELECT EXISTS(SELECT 1 FROM market WHERE pool_id = $1 AND market_type IN ('DEX', 'V2_DEX')) as exists"#;
+            let query = r#"SELECT EXISTS(SELECT 1 FROM market WHERE pool_id = $1 AND market_type = 'DEX') as exists"#;
             match measure_postgres!(
                 "check_white_list_pool",
                 sqlx::query(query).bind(pool).fetch_one(&self.postgres.pool)
@@ -374,7 +374,7 @@ impl CacheManager {
         let backoff_base = 500; // 기본 대기 시간 (밀리초)
 
         while retry_count < max_retries {
-            // PostgreSQL 쿼리 실행 — V2: quoteToken이 WETH이 아닐 수 있으므로
+            // PostgreSQL 쿼리 실행 — quoteToken이 WETH이 아닐 수 있으므로
             // market 테이블의 quote_id를 함께 가져와서 (token_id, quote_id) 페어로 복원
             let query = r#"SELECT token_id, quote_id FROM market WHERE pool_id = $1"#;
             match measure_postgres!(
@@ -392,7 +392,7 @@ impl CacheManager {
                     );
 
                     // 유니스왑 방식으로 token0, token1 정렬 (주소값 비교).
-                    // V1처럼 WETH으로 강제 fallback하지 않음 — V2 non-WETH quote
+                    // WETH으로 강제 fallback하지 않음 — non-WETH quote
                     // 토큰의 경우 (WETH, token_id)로 만들면 on-chain pool의 실제
                     // (token0, token1)과 어긋나서 reserve/amount 해석이 뒤집힘.
                     let (token0, token1) =
@@ -736,7 +736,7 @@ impl CacheManager {
                 (local_data.total_supply.clone(), local_data.holder_count)
             };
 
-            // V2 토큰인데 fee_info가 None으로 캐시되어 있으면 재조회 시도.
+            // fee_info가 None으로 캐시되어 있으면 재조회 시도.
             // CreateCurve 처리 시점에 indexer의 fee_config insert가 늦어 None으로
             // 캐시되면 영구히 누락되던 문제 회복용. fee_info_cache가 None TTL 30s
             // 후에 다시 DB 조회하므로 N초 이내에 자동 회복된다.
@@ -826,13 +826,13 @@ impl CacheManager {
             quote_symbol: String,
             quote_decimals: i32,
             quote_image_uri: String,
-            // fee_config LEFT JOIN 결과 (V2 전용)
+            // fee_config LEFT JOIN 결과
             fee_creator_fee_rate: Option<i16>,
             fee_curve_protocol_fee_rate: Option<i16>,
             fee_dex_protocol_fee_rate: Option<i16>,
         }
         while retry_count < max_retries {
-            // V2 스키마: DB 컬럼명은 전부 quote_* 기준
+            // DB 컬럼명은 전부 quote_* 기준
             // price 테이블은 (quote_id, block_number) 복합 PK
             // → 해당 market의 quote_id 기준으로 최신 가격 조회
             // quote_token LEFT JOIN으로 quote asset 메타데이터도 함께 가져옴
@@ -887,7 +887,7 @@ impl CacheManager {
 
                     // market_id가 빈 문자열이면 BONDING_CURVE_ADDRESS 사용
                     let market_id = if row.market_id.is_empty() {
-                        crate::config::V2_BONDING_CURVE_ADDRESS.clone()
+                        crate::config::BONDING_CURVE_ADDRESS.clone()
                     } else {
                         row.market_id
                     };
@@ -895,7 +895,7 @@ impl CacheManager {
                     // 먼저 is_graduated를 계산 (market_type 사용 전)
                     let is_graduated = matches!(row.market_type, MarketType::Dex);
 
-                    // fee_info 구성 (V2 전용: fee_config 테이블에 데이터가 있을 때만)
+                    // fee_info 구성 (fee_config 테이블에 데이터가 있을 때만)
                     let fee_info = match (
                         row.fee_creator_fee_rate,
                         row.fee_curve_protocol_fee_rate,
@@ -1245,7 +1245,7 @@ impl CacheManager {
         let mut retry_count = 0;
         let backoff_base = 100;
 
-        // V2 스키마: price PK가 (quote_id, block_number) 복합키로 바뀌었으므로
+        // price PK가 (quote_id, block_number) 복합키로 바뀌었으므로
         // 이 서비스가 사용하는 기본 quote(WETH) 기준으로 최신가를 조회한다.
         let quote_id = crate::config::WETH_ADDRESS.as_str();
 
@@ -1605,7 +1605,7 @@ impl CacheManager {
                 token_id
             );
 
-            // V2 스키마: price PK가 (quote_id, block_number)로 바뀌었으므로
+            // price PK가 (quote_id, block_number)로 바뀌었으므로
             // 해당 token market의 quote_id 기준으로 historical quote/USD를 매칭한다.
             // WETH으로 고정하면 non-WETH quote 토큰의 USD open이 잘못 복원된다.
             let quote_id = match self.get_market_info(token_id).await {
@@ -1950,7 +1950,7 @@ impl CacheManager {
         Ok(())
     }
 
-    /// fee_config 테이블에서 토큰의 수수료 설정 조회 (V2 전용)
+    /// fee_config 테이블에서 토큰의 수수료 설정 조회
     ///
     /// # 캐시 동작
     /// - `Some` 결과는 `FEE_INFO_CACHE_TTL_HIT` 동안 캐시 (fee_config는 거의 불변)
@@ -2099,9 +2099,13 @@ impl CacheManager {
             }
         }
 
-        // graduate 시점에 fee_info 재조회 (V2 토큰의 경우 fee_config 행이 CreateCurve
+        // graduate 시점에 fee_info 재조회 (fee_config 행이 CreateCurve
         // 처리 시점엔 아직 인덱싱 안 됐을 수 있어 None으로 캐싱된 상태일 수 있음).
-        // V1은 fee_info 자체가 없으므로 Curve 일 때만 시도.
+        //
+        // Curve 일 때만 시도하는 건 중복 재조회를 막기 위함 — 이미 Dex면 이 graduate는
+        // 재전달/재처리분이라 캐시가 채워져 있다. 다만 indexer가 먼저 market_type을
+        // DEX로 넘겨버린 뒤 graduate가 도착하면 정작 필요한 재조회를 건너뛴다.
+        // (기존 동작 유지. 실제로 fee_info 누락이 관측되면 이 가드부터 의심할 것)
         let current_market_type = self
             .local_store
             .get_market(&graduate.token)
@@ -2789,17 +2793,17 @@ impl CacheManager {
     /// 이벤트로부터 실제 actor를 해석한다.
     ///
     /// 게이트 우선순위 (observer와 동일):
-    /// - [A] event_sender == V2_GIFT_VAULT  → GiftVault 즉시 반환
-    /// - [B] event_sender == V2_BURN_VAULT  → BurnVault 즉시 반환
-    /// - [C] swap_to == V2_BURN_VAULT       → BurnVault 즉시 반환
-    /// - [D] swap_to == V2_GIFT_VAULT       → GiftVault 즉시 반환
+    /// - [A] event_sender == GIFT_VAULT  → GiftVault 즉시 반환
+    /// - [B] event_sender == BURN_VAULT  → BurnVault 즉시 반환
+    /// - [C] swap_to == BURN_VAULT       → BurnVault 즉시 반환
+    /// - [D] swap_to == GIFT_VAULT       → GiftVault 즉시 반환
     /// - [E] event_sender가 EOA/delegated   → event_sender 반환
     /// - [F] receipt 스캔: Transfer.to/from 후보 (0x0/0xdead 거부) → EOA면 반환
     /// - [G] fallback: tx.origin
     /// - [H] last resort: event_sender
     ///
-    /// `swap_to`는 V2 NadFunPair `Swap.to`처럼 토큰 수신자 주소가 따로 있는 경우에만 사용.
-    /// V2 Curve나 V1 경로처럼 동등 필드가 없는 호출부는 `None`을 넘긴다.
+    /// `swap_to`는 `Swap.to`처럼 토큰 수신자 주소가 event_sender와 따로 있는 경우에만 사용.
+    /// 동등 필드가 없는 Curve/Dex 호출부는 `None`을 넘긴다.
     pub async fn resolve_actor(
         &self,
         tx_hash: &str,
@@ -2815,30 +2819,30 @@ impl CacheManager {
         // GIFT/BURN vault가 buyback/gift 누적 목적으로 buy/sell할 때
         // contract여도 vault 주소 그대로 actor로 인정 (기명 actor)
         // (env가 빈 문자열이면 미매칭 처리)
-        if !V2_GIFT_VAULT_ADDRESS.is_empty()
-            && event_sender.eq_ignore_ascii_case(&V2_GIFT_VAULT_ADDRESS)
+        if !GIFT_VAULT_ADDRESS.is_empty()
+            && event_sender.eq_ignore_ascii_case(&GIFT_VAULT_ADDRESS)
         {
             return Ok(event_sender.to_string());
         }
-        if !V2_BURN_VAULT_ADDRESS.is_empty()
-            && event_sender.eq_ignore_ascii_case(&V2_BURN_VAULT_ADDRESS)
+        if !BURN_VAULT_ADDRESS.is_empty()
+            && event_sender.eq_ignore_ascii_case(&BURN_VAULT_ADDRESS)
         {
             return Ok(event_sender.to_string());
         }
 
         // 가드 [C]/[D]. Vault 컨트랙트 화이트리스트 (swap_to 기준)
-        // V2 NadFunPair `Swap.to`처럼 vault가 token 수신자인 경우, msg.sender는
+        // `Swap.to`처럼 vault가 token 수신자인 경우, msg.sender는
         // Router/Adapter여서 [A]/[B]에 안 걸린다. swap_to로 잡아 actor를 vault로 귀속.
         if let Some(to) = swap_to {
-            if !V2_BURN_VAULT_ADDRESS.is_empty()
-                && to.eq_ignore_ascii_case(&V2_BURN_VAULT_ADDRESS)
+            if !BURN_VAULT_ADDRESS.is_empty()
+                && to.eq_ignore_ascii_case(&BURN_VAULT_ADDRESS)
             {
-                return Ok(V2_BURN_VAULT_ADDRESS.clone());
+                return Ok(BURN_VAULT_ADDRESS.clone());
             }
-            if !V2_GIFT_VAULT_ADDRESS.is_empty()
-                && to.eq_ignore_ascii_case(&V2_GIFT_VAULT_ADDRESS)
+            if !GIFT_VAULT_ADDRESS.is_empty()
+                && to.eq_ignore_ascii_case(&GIFT_VAULT_ADDRESS)
             {
-                return Ok(V2_GIFT_VAULT_ADDRESS.clone());
+                return Ok(GIFT_VAULT_ADDRESS.clone());
             }
         }
 

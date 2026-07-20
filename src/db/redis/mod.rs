@@ -33,7 +33,7 @@ const PREFIX_EOA_DELEGATED: &str = "eoa_delegated:";
 /// 글로벌 Redis 키 prefix (env `REDIS_KEY_PREFIX`)를 키 앞에 prepend.
 ///
 /// prefix 미설정이면 그대로 반환 (zero-cost). 같은 Redis 인스턴스에서
-/// v1/v2가 공존할 때만 사용됨.
+/// 여러 배포가 공존할 때만 사용됨.
 fn with_prefix(key: String) -> String {
     let prefix = crate::config::redis_key_prefix();
     if prefix.is_empty() {
@@ -115,7 +115,7 @@ impl RedisDatabase {
     ///
     /// - `REDIS_KEY_PREFIX` 미설정: FLUSHALL (기존 동작) — DB 전체 비움.
     /// - `REDIS_KEY_PREFIX` 설정: SCAN + DEL로 본 인스턴스 prefix 매칭 키만 삭제.
-    ///   같은 Redis를 v1과 공유하는 v2 배포에서 prod 데이터를 안 건드리도록.
+    ///   같은 Redis를 다른 배포와 공유할 때 prod 데이터를 안 건드리도록.
     pub async fn flush_all(&self) -> Result<()> {
         let mut conn = self.get_conn();
         let prefix = crate::config::redis_key_prefix();

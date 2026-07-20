@@ -8,7 +8,7 @@ use std::time::Duration;
 /// `delay` 만큼 sleep 한 뒤 다시 시도한다. 백오프는 매 회 2배가 된다.
 /// 마지막 시도까지 실패하면 마지막 `Err` 를 그대로 반환한다.
 ///
-/// 용도: V2 Graduate 처리에서 indexer 가 아직 PG `market` 행을 commit 안 한 짧은
+/// 용도: Graduate 처리에서 indexer 가 아직 PG `market` 행을 commit 안 한 짧은
 /// 레이스를 흡수하기 위해 `get_market_info` 를 짧게 재시도.
 pub async fn retry_async<F, Fut, T, E, R>(
     mut op: F,

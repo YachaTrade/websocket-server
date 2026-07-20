@@ -57,7 +57,7 @@ pub struct QuoteInfo {
     pub image_uri: String,
 }
 
-/// Fee 설정 정보 (V2 전용)
+/// Fee 설정 정보
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct FeeInfo {
     /// 크리에이터 수수료율 (basis points)
@@ -74,11 +74,11 @@ pub struct FeeInfo {
 pub struct MarketInfo {
     pub market_type: MarketType,
     pub token_id: String,
-    /// Quote token 정보 (V1: WETH, V2: quoteToken - WETH이 아닐 수 있음)
+    /// Quote token 정보 (WETH가 아닐 수 있음)
     pub quote_info: QuoteInfo,
     pub market_id: String,
     pub reserve_native: String,
-    /// Quote reserve (V2 schema alias; V1에서는 reserve_native와 동일 값)
+    /// Quote reserve — `reserve_native`와 동일 값을 담는 alias (wire 호환용)
     #[serde(default)]
     pub reserve_quote: String,
     pub reserve_token: String,
@@ -86,7 +86,7 @@ pub struct MarketInfo {
     pub token_price: String,
     /// MON/USD price
     pub native_price: String,
-    /// Quote/USD price (V2 schema alias; V1에서는 native_price와 동일 값)
+    /// Quote/USD price — `native_price`와 동일 값을 담는 alias (wire 호환용)
     #[serde(default)]
     pub quote_price: String,
     /// MON/Token price
@@ -95,7 +95,7 @@ pub struct MarketInfo {
     pub price_usd: String,
     /// MON/Token price
     pub price_native: String,
-    /// Quote/Token price (V2 schema alias; V1에서는 price_native와 동일 값)
+    /// Quote/Token price — `price_native`와 동일 값을 담는 alias (wire 호환용)
     #[serde(default)]
     pub price_quote: String,
     /// Total supply (used for market cap calculation in bonding curve)
@@ -108,7 +108,7 @@ pub struct MarketInfo {
     pub ath_price_usd: String,
     //Ath price(Native)
     pub ath_price_native: String,
-    /// ATH price (Quote) — V2 alias; V1에서는 ath_price_native와 동일 값
+    /// ATH price (Quote) — `ath_price_native`와 동일 값을 담는 alias (wire 호환용)
     #[serde(default)]
     pub ath_price_quote: String,
     /// Holder count (used for tokne total holder count)
@@ -116,7 +116,7 @@ pub struct MarketInfo {
     /// Last stats update timestamp (holder_count, total_supply) - not serialized
     #[serde(skip_serializing, default)]
     pub last_stats_update: i64,
-    /// Fee 설정 정보 (V2 전용, V1은 null)
+    /// Fee 설정 정보 (fee_config 행이 없으면 null)
     pub fee_info: Option<FeeInfo>,
 }
 
@@ -135,7 +135,7 @@ pub enum SwapType {
 pub struct SwapInfo {
     pub event_type: SwapType,
     pub native_amount: String,
-    /// Quote amount (V2 schema alias; V1에서는 native_amount와 동일 값)
+    /// Quote amount — `native_amount`와 동일 값을 담는 alias (wire 호환용)
     #[serde(default)]
     pub quote_amount: String,
     pub token_amount: String,

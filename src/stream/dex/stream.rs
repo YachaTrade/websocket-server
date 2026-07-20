@@ -60,7 +60,7 @@ sol! {
     #[allow(missing_docs)]
     #[sol(rpc)]
     IUniswapV3Pool,
-    "abi/v1/IUniswapV3Pool.json"
+    "abi/IUniswapV3Pool.json"
 }
 
 #[instrument()]
@@ -368,7 +368,7 @@ async fn parse_log(
                 (false, false) => true,  // token out, native in => Buy
             };
 
-            // V1 DEX는 swap_to 동등 필드가 없어 None 전달.
+            // DEX Swap은 swap_to 동등 필드가 없어 None 전달.
             let account_id = cache_manager
                 .resolve_actor(&transaction_hash, &event_sender.to_string(), token, is_buy_for_resolve, None)
                 .await

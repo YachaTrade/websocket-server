@@ -36,4 +36,7 @@ v2 bonding curve + v1 dex(Uniswap V3) 조합으로 스트림을 재구성하고,
 배포 전 체크리스트 (코드 밖):
 - giwa RPC 3개 endpoint + WS `eth_subscribe("logs")` 지원 확인
 - observer giwa 브랜치: market_type `CURVE`/`DEX`, Pyth LAG 3s / BUCKET 10s 일치 확인
-- env: `V2_BONDING_CURVE`, `V1_DEX_FACTORY`, `WETH`(giwa wrapped native), quote_token 테이블 Pyth feed ID
+- env: `.env.example` 의 필수 블록을 그대로 채울 것. 특히 `BONDING_CURVE`, `WETH`(giwa wrapped
+  native), `MAIN_RPC_URL`/`SUB_RPC_URL_1`/`SUB_RPC_URL_2`, quote_token 테이블의 Pyth feed ID.
+  컨테이너 배포 시 `IP=0.0.0.0` 필수 (기본값은 127.0.0.1).
+  env 키의 v1/v2 접두사는 `refactor/drop-v1-v2-naming` 에서 제거됐다.

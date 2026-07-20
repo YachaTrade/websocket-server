@@ -1,6 +1,7 @@
 /target
 .env
 .env.*
+!.env.example
 deploy/
 .DS_Store
 graphify-out/

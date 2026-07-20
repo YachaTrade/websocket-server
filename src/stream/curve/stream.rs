@@ -21,7 +21,7 @@ use tracing::{info, instrument, warn};
 
 use crate::{
     client::RpcClient,
-    config::V2_BONDING_CURVE_ADDRESS,
+    config::BONDING_CURVE_ADDRESS,
     db::cache::CacheManager,
     types::stream::{
         Buy, CreateCurve, CurveChartUpdate, CurveEventType, CurveSync, EventType, Graduate, Sell,
@@ -30,12 +30,12 @@ use crate::{
     utils::to_big_decimal,
 };
 
-use super::receive::receive_v2_curve_event;
+use super::receive::receive_curve_event;
 
 /// 트랜잭션별 이벤트 버퍼 키
 /// 같은 tx 안에서 trade보다 앞선 가장 가까운 Sync를 찾아 chart update를 생성한다.
 ///
-/// V2 BondingCurve는 단일 컨트랙트가 모든 V2 토큰을 호스트하므로 한 트랜잭션이
+/// BondingCurve는 단일 컨트랙트가 모든 토큰을 호스트하므로 한 트랜잭션이
 /// 두 토큰을 건드릴 수 있다(router/aggregator multi-hop 등). 토큰을 키에 포함하지
 /// 않으면 token A의 Sell이 token B의 Sync와 페어돼 B의 chart에 A의 거래량이
 /// 박히는 cross-token 오염이 발생한다. token을 키에 포함해 토큰별로 버퍼 entry를
@@ -56,24 +56,24 @@ struct TransactionEventBuffer {
     timestamp: time::Instant,
 }
 
-/// V2 Curve 이벤트 버퍼 (transaction_hash + log_index -> events)
-/// V1과 독립적인 싱글톤으로 전역 관리
+/// Curve 이벤트 버퍼 (transaction_hash + log_index -> events)
+/// 싱글톤으로 전역 관리
 static EVENT_BUFFER: once_cell::sync::Lazy<Arc<DashMap<EventBufferKey, TransactionEventBuffer>>> =
     once_cell::sync::Lazy::new(|| Arc::new(DashMap::new()));
 
-// V2 BondingCurve ABI 바인딩
+// BondingCurve ABI 바인딩
 sol! {
     #[allow(missing_docs)]
     #[sol(rpc)]
-    IV2BondingCurve,
-    "abi/v2/BondingCurve.json"
+    IBondingCurve,
+    "abi/BondingCurve.json"
 }
 
-/// V2 BondingCurve 이벤트 스트림
+/// BondingCurve 이벤트 스트림
 /// 수신 이벤트: Create, Buy, Sell, Sync, Graduate
-/// V1과 동일한 패턴이지만 V2 ABI 및 V2_BONDING_CURVE_ADDRESS 사용
+/// BondingCurve ABI 및 BONDING_CURVE_ADDRESS 사용
 #[instrument(skip(_event_type))]
-pub async fn stream_v2_curve_events(_event_type: EventType) -> Result<()> {
+pub async fn stream_curve_events(_event_type: EventType) -> Result<()> {
     let client = match RpcClient::instance() {
         Ok(client) => client,
         Err(e) => {
@@ -81,22 +81,22 @@ pub async fn stream_v2_curve_events(_event_type: EventType) -> Result<()> {
         }
     };
 
-    // V2 BondingCurve 주소로 필터 생성
+    // BondingCurve 주소로 필터 생성
     // SnipingPenalty 이벤트는 구독하지 않음
     let filter = Filter::new()
-        .address(V2_BONDING_CURVE_ADDRESS.parse::<Address>().unwrap())
+        .address(BONDING_CURVE_ADDRESS.parse::<Address>().unwrap())
         .events(vec![
-            IV2BondingCurve::Create::SIGNATURE,
-            IV2BondingCurve::Buy::SIGNATURE,
-            IV2BondingCurve::Sell::SIGNATURE,
-            IV2BondingCurve::Sync::SIGNATURE,
-            IV2BondingCurve::Graduate::SIGNATURE,
+            IBondingCurve::Create::SIGNATURE,
+            IBondingCurve::Buy::SIGNATURE,
+            IBondingCurve::Sell::SIGNATURE,
+            IBondingCurve::Sync::SIGNATURE,
+            IBondingCurve::Graduate::SIGNATURE,
         ]);
 
     let stream_timeout = Duration::from_millis(*crate::config::STREAM_TIMEOUT);
     let reconnect_delay = Duration::from_secs(1);
     info!(
-        "V2 Curve stream timeout set to {}ms",
+        "Curve stream timeout set to {}ms",
         *crate::config::STREAM_TIMEOUT
     );
 
@@ -137,7 +137,7 @@ pub async fn stream_v2_curve_events(_event_type: EventType) -> Result<()> {
                 for key in to_remove {
                     if let Some((_, buf)) = buffer.remove(&key) {
                         warn!(
-                            "Flushing incomplete V2 transaction buffer after timeout: tx={}, tx_idx={}, trades={}, syncs={}",
+                            "Flushing incomplete transaction buffer after timeout: tx={}, tx_idx={}, trades={}, syncs={}",
                             key.transaction_hash,
                             key.transaction_index,
                             buf.trades.len(),
@@ -165,14 +165,14 @@ pub async fn stream_v2_curve_events(_event_type: EventType) -> Result<()> {
         let mut stream = match client.get_stream(&filter).await {
             Ok(stream) => stream,
             Err(e) => {
-                error_log!("Failed to create V2 curve stream, retrying in 1s: {}", e);
+                error_log!("Failed to create curve stream, retrying in 1s: {}", e);
                 client.update_best_provider().await;
                 tokio::time::sleep(reconnect_delay).await;
                 continue;
             }
         };
 
-        info!("V2 Curve log stream started successfully");
+        info!("Curve log stream started successfully");
 
         // 스트림 이벤트 처리 루프 - provider 변경 감지
         loop {
@@ -180,12 +180,12 @@ pub async fn stream_v2_curve_events(_event_type: EventType) -> Result<()> {
             let new_provider_index = client.get_current_provider_index().await;
             if new_provider_index != current_provider_index {
                 info!(
-                    "Provider changed from {} to {}, reconnecting V2 Curve stream",
+                    "Provider changed from {} to {}, reconnecting Curve stream",
                     current_provider_index, new_provider_index
                 );
                 // 명시적으로 stream을 drop하여 subscription 정리
                 drop(stream);
-                info!("V2 Curve stream subscription closed due to provider change");
+                info!("Curve stream subscription closed due to provider change");
                 break; // 외부 루프로 돌아가서 새 스트림 생성
             }
 
@@ -197,7 +197,7 @@ pub async fn stream_v2_curve_events(_event_type: EventType) -> Result<()> {
                         continue;
                     }
 
-                    // V2 curve 스트림에서 로그를 받았으므로 스트림이 살아있음을 기록
+                    // curve 스트림에서 로그를 받았으므로 스트림이 살아있음을 기록
                     crate::metrics::METRICS.stream.record_curve_event();
 
                     let cache_mgr = cache_manager.clone();
@@ -206,14 +206,14 @@ pub async fn stream_v2_curve_events(_event_type: EventType) -> Result<()> {
                         let event = parse_log(log, client, cache_mgr, block_cache).await;
                         match event {
                             Ok(event) => {
-                                info!("V2 CURVE Stream Event: {event:?}");
-                                if let Err(e) = handle_v2_curve_event(event).await {
-                                    error_log!("Failed to handle V2 curve event: {}", e);
+                                info!("CURVE Stream Event: {event:?}");
+                                if let Err(e) = handle_curve_event(event).await {
+                                    error_log!("Failed to handle curve event: {}", e);
                                 }
                             }
                             Err(e) => {
                                 if !e.to_string().contains("Not a white list token") {
-                                    error_log!("Failed to parse V2 curve log - error: {}", e);
+                                    error_log!("Failed to parse curve log - error: {}", e);
                                 }
                             }
                         }
@@ -221,11 +221,11 @@ pub async fn stream_v2_curve_events(_event_type: EventType) -> Result<()> {
                 }
                 Ok(None) => {
                     warn!(
-                        "V2 Curve stream ended (subscription error or WebSocket closed), reconnecting..."
+                        "Curve stream ended (subscription error or WebSocket closed), reconnecting..."
                     );
                     // 명시적으로 stream을 drop하여 subscription 정리
                     drop(stream);
-                    info!("V2 Curve stream subscription closed due to stream end");
+                    info!("Curve stream subscription closed due to stream end");
 
                     // WebSocket 에러로 인한 종료일 수 있으므로 provider 재연결
                     if let Err(e) = client.reconnect_current_provider().await {
@@ -241,12 +241,12 @@ pub async fn stream_v2_curve_events(_event_type: EventType) -> Result<()> {
                 }
                 Err(_) => {
                     warn!(
-                        "V2 Curve stream timed out after {}ms, reconnecting provider to cleanup subscriptions...",
+                        "Curve stream timed out after {}ms, reconnecting provider to cleanup subscriptions...",
                         stream_timeout.as_millis()
                     );
                     // 명시적으로 stream을 drop하여 subscription 정리
                     drop(stream);
-                    info!("V2 Curve stream subscription closed due to timeout");
+                    info!("Curve stream subscription closed due to timeout");
 
                     // Provider를 재연결하여 WebSocket connection과 모든 subscription 정리
                     if let Err(e) = client.reconnect_current_provider().await {
@@ -269,8 +269,8 @@ pub async fn stream_v2_curve_events(_event_type: EventType) -> Result<()> {
     }
 }
 
-/// V2 BondingCurve 로그를 파싱하여 CurveEventType으로 변환
-/// V2 ABI의 이벤트 시그니처를 사용하여 Create, Buy, Sell, Sync, Graduate 이벤트를 파싱
+/// BondingCurve 로그를 파싱하여 CurveEventType으로 변환
+/// BondingCurve ABI의 이벤트 시그니처를 사용하여 Create, Buy, Sell, Sync, Graduate 이벤트를 파싱
 use crate::stream::{is_valid_nadfun_token_address, validate_curve_token};
 
 async fn parse_log(
@@ -282,7 +282,7 @@ async fn parse_log(
     let transaction_hash = match log.transaction_hash {
         Some(hash) => hash.to_string(),
         None => {
-            error_log!("No transaction hash found in V2 curve log: {:?}", log);
+            error_log!("No transaction hash found in curve log: {:?}", log);
             return Err(anyhow::anyhow!("No transaction hash"));
         }
     };
@@ -294,7 +294,7 @@ async fn parse_log(
             Err(e) => {
                 error_log!("Failed to get latest block number: {}", e);
                 return Err(anyhow::anyhow!(
-                    "Fail to V2 Curve get block number {e:?}\nLog{log:?}"
+                    "Fail to Curve get block number {e:?}\nLog{log:?}"
                 ));
             }
         },
@@ -307,7 +307,7 @@ async fn parse_log(
                 Ok(timestamp) => timestamp,
                 Err(e) => {
                     error_log!(
-                        "Fail to V2 Curve get block timestamp for block {block_number}: {e:?}\nLog: {log:?}"
+                        "Fail to Curve get block timestamp for block {block_number}: {e:?}\nLog: {log:?}"
                     );
                     return Err(anyhow::anyhow!(
                         "Fail to get block timestamp for block {block_number}: {e:?}\nLog: {log:?}"
@@ -320,10 +320,10 @@ async fn parse_log(
     let transaction_index = log.transaction_index.unwrap_or(u64::MAX);
 
     match log.topic0() {
-        // V2 Create 이벤트 처리
-        // V1의 CurveCreate와 달리 pair, quoteToken 필드가 추가됨
-        Some(&IV2BondingCurve::Create::SIGNATURE_HASH) => {
-            let IV2BondingCurve::Create {
+        // Create 이벤트 처리
+        // (creator, token, pair, quoteToken) 필드 사용
+        Some(&IBondingCurve::Create::SIGNATURE_HASH) => {
+            let IBondingCurve::Create {
                 creator,
                 token,
                 pair,
@@ -337,12 +337,12 @@ async fn parse_log(
             } = match log.log_decode() {
                 Ok(decoded) => decoded.inner.data,
                 Err(e) => {
-                    error_log!("Failed to decode V2 Create log: {}", e);
-                    return Err(anyhow::anyhow!("Failed to decode V2 Create log: {}", e));
+                    error_log!("Failed to decode Create log: {}", e);
+                    return Err(anyhow::anyhow!("Failed to decode Create log: {}", e));
                 }
             };
 
-            // V2 nad.fun 토큰은 마지막 4자가 "7777" — 컨트랙트가 vanity 강제하지만 본 서버에서도 defensive check.
+            // nad.fun 토큰은 마지막 4자가 "7777" — 컨트랙트가 vanity 강제하지만 본 서버에서도 defensive check.
             // 통과 못 하면 whitelist 등록 자체를 안 해 downstream Buy/Sell에서도 자동 거부.
             let token_str_check = token.to_string();
             if !is_valid_nadfun_token_address(&token_str_check) {
@@ -421,9 +421,9 @@ async fn parse_log(
                     .normalized()
                     .to_plain_string();
 
-                // Curve: MarketType::Curve, market_id = V2_BONDING_CURVE_ADDRESS
-                // V2는 quoteToken이 WETH이 아닐 수 있으므로 DB에서 QuoteInfo 조회
-                // fee_config도 함께 조회 (V2 전용)
+                // Curve: MarketType::Curve, market_id = BONDING_CURVE_ADDRESS
+                // quoteToken이 WETH이 아닐 수 있으므로 DB에서 QuoteInfo 조회
+                // fee_config도 함께 조회
                 let quote_token_str = quoteToken.to_string();
                 let token_str_for_fee = token.to_string();
                 let (quote_info, fee_info) = tokio::join!(
@@ -435,7 +435,7 @@ async fn parse_log(
                     market_type: MarketType::Curve,
                     token_id: token.to_string(),
                     quote_info,
-                    market_id: V2_BONDING_CURVE_ADDRESS.clone(),
+                    market_id: BONDING_CURVE_ADDRESS.clone(),
                     token_price: token_price.clone(),
                     native_price: latest_native_price.clone(),
                     quote_price: latest_native_price,
@@ -454,7 +454,7 @@ async fn parse_log(
                     volume: "0".to_string(),
                     holder_count: 0,      // 초기 생성자 1명
                     last_stats_update: 0, // 초기 생성 시 0
-                    fee_info,             // V2 fee 설정
+                    fee_info,             // fee 설정
                 };
 
                 // String 값들을 미리 생성
@@ -462,9 +462,9 @@ async fn parse_log(
                 let pair_str = pair.to_string();
 
                 // 모든 캐시 작업을 병렬로 실행
-                // V2 Create에서는 pair 화이트리스트도 함께 등록
-                // V2 Create: quoteToken과 token으로 token0/token1 결정
-                // V2에서는 quoteToken이 WETH이 아닐 수도 있으므로 quoteToken 주소로 정렬
+                // Create에서는 pair 화이트리스트도 함께 등록
+                // Create: quoteToken과 token으로 token0/token1 결정
+                // quoteToken이 WETH이 아닐 수도 있으므로 quoteToken 주소로 정렬
                 let (pool_token0, pool_token1) =
                     if quoteToken.to_string().to_lowercase() < token_str.to_lowercase() {
                         (quoteToken.to_string(), token_str.clone())
@@ -477,7 +477,7 @@ async fn parse_log(
                     cache_manager.insert_white_list_pool(&pair_str, true),
                     cache_manager.set_token_info(&token_str, &token_info),
                     cache_manager.set_market_info(&token_str, &market_info),
-                    // V2에서는 Create 시점에 pair가 존재하므로 pool_pair 등록
+                    // Create 시점에 pair가 존재하므로 pool_pair 등록
                     // Swap 이벤트에서 get_pool_pair로 token0/token1 조회 가능하게 함
                     cache_manager.insert_pool_pair(&pair_str, &pool_token0, &pool_token1),
                 );
@@ -508,7 +508,7 @@ async fn parse_log(
                 }
             }
 
-            // V2 Create: quoteToken 사용, pair 포함
+            // Create: quoteToken 사용, pair 포함
             let create_curve = CreateCurve {
                 creator: creator.to_string(),
                 token: token.to_string(),
@@ -527,18 +527,18 @@ async fn parse_log(
             };
 
             info!(
-                "🟢 V2 CURVE CREATE 이벤트 생성: token={}, creator={}, name={}",
+                "🟢 CURVE CREATE 이벤트 생성: token={}, creator={}, name={}",
                 create_curve.token, create_curve.creator, create_curve.name
             );
             Ok(CurveEventType::CreateCurve(create_curve))
         }
 
-        // V2 Buy 이벤트 처리
-        // V1과 달리 (token, buyer, quoteIn, tokenOut) 필드 사용
-        Some(&IV2BondingCurve::Buy::SIGNATURE_HASH) => {
+        // Buy 이벤트 처리
+        // (token, buyer, quoteIn, tokenOut) 필드 사용
+        Some(&IBondingCurve::Buy::SIGNATURE_HASH) => {
             let curve = log.address().to_string();
-            info!("V2 Buy log decoded: curve={}", curve);
-            let IV2BondingCurve::Buy {
+            info!("Buy log decoded: curve={}", curve);
+            let IBondingCurve::Buy {
                 token,
                 buyer,
                 quoteIn,
@@ -546,12 +546,12 @@ async fn parse_log(
             } = match log.log_decode() {
                 Ok(decoded) => decoded.inner.data,
                 Err(e) => {
-                    error_log!("Failed to decode V2 Buy log: {}", e);
-                    return Err(anyhow::anyhow!("Failed to decode V2 Buy log: {}", e));
+                    error_log!("Failed to decode Buy log: {}", e);
+                    return Err(anyhow::anyhow!("Failed to decode Buy log: {}", e));
                 }
             };
             info!(
-                "V2 Buy log decoded: token={}, buyer={}, quoteIn={}, tokenOut={}",
+                "Buy log decoded: token={}, buyer={}, quoteIn={}, tokenOut={}",
                 token, buyer, quoteIn, tokenOut
             );
 
@@ -561,15 +561,15 @@ async fn parse_log(
             validate_curve_token(&cache_manager, &token).await?;
 
             // buyer로 actor 해석 (EIP-7702 지원)
-            // V2 Curve Buy/Sell은 swap_to 동등 필드가 없어 None 전달.
+            // Curve Buy/Sell은 swap_to 동등 필드가 없어 None 전달.
             let account_id = cache_manager
                 .resolve_actor(&transaction_hash, &buyer.to_string(), &token, true, None)
                 .await
                 .unwrap_or_else(|e| {
-                    warn!("[V2 CURVE] Failed to resolve actor for Buy: {}", e);
+                    warn!("[CURVE] Failed to resolve actor for Buy: {}", e);
                     buyer.to_string()
                 });
-            // V2: quoteIn = amountIn, tokenOut = amountOut
+            // quoteIn = amountIn, tokenOut = amountOut
             let amount_in = to_big_decimal(quoteIn);
             let amount_out = to_big_decimal(tokenOut);
 
@@ -589,7 +589,7 @@ async fn parse_log(
             };
 
             info!(
-                "🔵 V2 CURVE BUY 이벤트 생성: token={}, amount_in={}, amount_out={}",
+                "🔵 CURVE BUY 이벤트 생성: token={}, amount_in={}, amount_out={}",
                 buy.token, buy.amount_in, buy.amount_out
             );
 
@@ -599,12 +599,12 @@ async fn parse_log(
             Ok(CurveEventType::Buy(buy))
         }
 
-        // V2 Sell 이벤트 처리
-        // V1과 달리 (token, seller, tokenIn, quoteOut) 필드 사용
-        Some(&IV2BondingCurve::Sell::SIGNATURE_HASH) => {
+        // Sell 이벤트 처리
+        // (token, seller, tokenIn, quoteOut) 필드 사용
+        Some(&IBondingCurve::Sell::SIGNATURE_HASH) => {
             let curve = log.address().to_string();
 
-            let IV2BondingCurve::Sell {
+            let IBondingCurve::Sell {
                 token,
                 seller,
                 tokenIn,
@@ -612,8 +612,8 @@ async fn parse_log(
             } = match log.log_decode() {
                 Ok(decoded) => decoded.inner.data,
                 Err(e) => {
-                    error_log!("Failed to decode V2 Sell log: {}", e);
-                    return Err(anyhow::anyhow!("Failed to decode V2 Sell log: {}", e));
+                    error_log!("Failed to decode Sell log: {}", e);
+                    return Err(anyhow::anyhow!("Failed to decode Sell log: {}", e));
                 }
             };
 
@@ -627,10 +627,10 @@ async fn parse_log(
                 .resolve_actor(&transaction_hash, &seller.to_string(), &token, false, None)
                 .await
                 .unwrap_or_else(|e| {
-                    warn!("[V2 CURVE] Failed to resolve actor for Sell: {}", e);
+                    warn!("[CURVE] Failed to resolve actor for Sell: {}", e);
                     seller.to_string()
                 });
-            // V2: tokenIn = amountIn, quoteOut = amountOut
+            // tokenIn = amountIn, quoteOut = amountOut
             let amount_in = to_big_decimal(tokenIn);
             let amount_out = to_big_decimal(quoteOut);
 
@@ -650,7 +650,7 @@ async fn parse_log(
             };
 
             info!(
-                "🔴 V2 CURVE SELL 이벤트 생성: token={}, amount_in={}, amount_out={}",
+                "🔴 CURVE SELL 이벤트 생성: token={}, amount_in={}, amount_out={}",
                 sell.token, sell.amount_in, sell.amount_out
             );
 
@@ -660,10 +660,10 @@ async fn parse_log(
             Ok(CurveEventType::Sell(sell))
         }
 
-        // V2 Sync 이벤트 처리
-        // V2: realQuoteReserve, realTokenReserve, virtualQuoteReserve, virtualTokenReserve
-        Some(&IV2BondingCurve::Sync::SIGNATURE_HASH) => {
-            let IV2BondingCurve::Sync {
+        // Sync 이벤트 처리
+        // realQuoteReserve, realTokenReserve, virtualQuoteReserve, virtualTokenReserve
+        Some(&IBondingCurve::Sync::SIGNATURE_HASH) => {
+            let IBondingCurve::Sync {
                 token,
                 realQuoteReserve,
                 realTokenReserve,
@@ -672,15 +672,15 @@ async fn parse_log(
             } = match log.log_decode() {
                 Ok(decoded) => decoded.inner.data,
                 Err(e) => {
-                    error_log!("Failed to decode V2 Sync log: {}", e);
-                    return Err(anyhow::anyhow!("Failed to decode V2 Sync log: {}", e));
+                    error_log!("Failed to decode Sync log: {}", e);
+                    return Err(anyhow::anyhow!("Failed to decode Sync log: {}", e));
                 }
             };
 
             let token = token.to_string();
 
-            // V2: quote는 반드시 native(WETH)가 아닐 수 있음
-            // CurveSync 필드명은 V1 호환을 위해 `native`로 유지하지만, 의미상 quote 리저브
+            // quote는 native(WETH)가 아닐 수 있음
+            // CurveSync 필드명은 wire 호환을 위해 `native`로 유지하지만, 의미상 quote 리저브
             let virtual_quote = to_big_decimal(virtualQuoteReserve);
             let virtual_token = to_big_decimal(virtualTokenReserve);
 
@@ -690,9 +690,9 @@ async fn parse_log(
 
             let sync = CurveSync {
                 token: token.to_string(),
-                reserve_native_amount: to_big_decimal(realQuoteReserve), // V2: quote reserve
+                reserve_native_amount: to_big_decimal(realQuoteReserve), // quote reserve
                 reserve_token_amount: to_big_decimal(realTokenReserve),
-                virtual_native_amount: virtual_quote, // V2: quote reserve
+                virtual_native_amount: virtual_quote, // quote reserve
                 virtual_token_amount: virtual_token,
                 price,
                 transaction_hash,
@@ -703,7 +703,7 @@ async fn parse_log(
             };
 
             info!(
-                "🔄 V2 CURVE SYNC 이벤트 생성: token={}, reserve_token_amount={}",
+                "🔄 CURVE SYNC 이벤트 생성: token={}, reserve_token_amount={}",
                 sync.token, sync.reserve_token_amount
             );
 
@@ -713,21 +713,21 @@ async fn parse_log(
             Ok(CurveEventType::CurveSync(sync))
         }
 
-        // V2 Graduate 이벤트 처리
-        // V2: (token, pair) -> pair를 pool로 매핑
-        Some(&IV2BondingCurve::Graduate::SIGNATURE_HASH) => {
-            let IV2BondingCurve::Graduate { token, pair } = match log.log_decode() {
+        // Graduate 이벤트 처리
+        // (token, pair) -> pair를 pool로 매핑
+        Some(&IBondingCurve::Graduate::SIGNATURE_HASH) => {
+            let IBondingCurve::Graduate { token, pair } = match log.log_decode() {
                 Ok(decoded) => decoded.inner.data,
                 Err(e) => {
-                    error_log!("Failed to decode V2 Graduate log: {}", e);
-                    return Err(anyhow::anyhow!("Failed to decode V2 Graduate log: {}", e));
+                    error_log!("Failed to decode Graduate log: {}", e);
+                    return Err(anyhow::anyhow!("Failed to decode Graduate log: {}", e));
                 }
             };
 
             let token = token.to_string();
             let pool = pair.to_string();
 
-            // V2에서는 quoteToken이 WETH이 아닐 수 있으므로 market_info에서 quote_id 조회.
+            // quoteToken이 WETH이 아닐 수 있으므로 market_info에서 quote_id 조회.
             // 조회 실패 시 WETH으로 fallback하지 않음 — non-WETH quote 토큰의 경우
             // pool_pair가 (WETH, token)으로 잘못 등록되어 on-chain pool의 실제
             // (token0, token1)과 어긋남. 이후 모든 PAIR 이벤트의 reserve/amount
@@ -747,7 +747,7 @@ async fn parse_log(
                 GRADUATE_MARKET_INFO_INITIAL_DELAY_MS,
                 |attempt, err, delay| {
                     warn!(
-                        "V2 Graduate: market_info 조회 실패 ({}) — 재시도 {}/{} ({}ms 후): {}",
+                        "Graduate: market_info 조회 실패 ({}) — 재시도 {}/{} ({}ms 후): {}",
                         token,
                         attempt,
                         GRADUATE_MARKET_INFO_MAX_ATTEMPTS,
@@ -761,13 +761,13 @@ async fn parse_log(
                 Ok(market) => market.quote_info.quote_id,
                 Err(e) => {
                     error_log!(
-                        "V2 Graduate: market_info 조회 실패 ({}) — quote_id 결정 불가 ({}회 재시도 후 포기), graduate 중단: {}",
+                        "Graduate: market_info 조회 실패 ({}) — quote_id 결정 불가 ({}회 재시도 후 포기), graduate 중단: {}",
                         token,
                         GRADUATE_MARKET_INFO_MAX_ATTEMPTS,
                         e
                     );
                     return Err(anyhow::anyhow!(
-                        "V2 Graduate: market_info 조회 실패 ({}) after {} retries: {}",
+                        "Graduate: market_info 조회 실패 ({}) after {} retries: {}",
                         token,
                         GRADUATE_MARKET_INFO_MAX_ATTEMPTS,
                         e
@@ -814,18 +814,18 @@ async fn parse_log(
             if let Err(e) = cache_manager.update_cache_from_graduate(&graduate).await {
                 // 캐시 업데이트 실패는 치명적이지 않으므로 warning만 로깅하고 계속 진행
                 warn!(
-                    "Failed to update cache from V2 Graduate for token {}: {}",
+                    "Failed to update cache from Graduate for token {}: {}",
                     graduate.token, e
                 );
             }
 
             info!(
-                "🎓 V2 Graduate 이벤트 생성: token={}, pool={}",
+                "🎓 Graduate 이벤트 생성: token={}, pool={}",
                 graduate.token, graduate.pool
             );
             Ok(CurveEventType::Graduate(graduate))
         }
-        _ => Err(anyhow::anyhow!("Unknown V2 curve event type")),
+        _ => Err(anyhow::anyhow!("Unknown curve event type")),
     }
 }
 
@@ -864,8 +864,8 @@ async fn get_cached_block_timestamp(
     Ok(block_timestamp)
 }
 
-/// V2 Curve 이벤트를 처리하고 Buy/Sell + Sync를 묶어서 ChartUpdate 생성
-async fn handle_v2_curve_event(event: CurveEventType) -> Result<()> {
+/// Curve 이벤트를 처리하고 Buy/Sell + Sync를 묶어서 ChartUpdate 생성
+async fn handle_curve_event(event: CurveEventType) -> Result<()> {
     let buffer = EVENT_BUFFER.clone();
 
     // 패턴 매칭으로 이벤트 타입 확인 (enum의 장점 활용)
@@ -877,11 +877,11 @@ async fn handle_v2_curve_event(event: CurveEventType) -> Result<()> {
                 token: buy.token.clone(),
             };
             info!(
-                "📥 V2 Buy event: tx={}, tx_idx={}, log_idx={}, token={}",
+                "📥 Buy event: tx={}, tx_idx={}, log_idx={}, token={}",
                 buy.transaction_hash, buy.transaction_index, buy.log_index, buy.token
             );
             process_trade_event(event.clone(), key, buffer).await?;
-            receive_v2_curve_event(event).await
+            receive_curve_event(event).await
         }
         CurveEventType::Sell(sell) => {
             let key = EventBufferKey {
@@ -890,11 +890,11 @@ async fn handle_v2_curve_event(event: CurveEventType) -> Result<()> {
                 token: sell.token.clone(),
             };
             info!(
-                "📥 V2 Sell event: tx={}, tx_idx={}, log_idx={}, token={}",
+                "📥 Sell event: tx={}, tx_idx={}, log_idx={}, token={}",
                 sell.transaction_hash, sell.transaction_index, sell.log_index, sell.token
             );
             process_trade_event(event.clone(), key, buffer).await?;
-            receive_v2_curve_event(event).await
+            receive_curve_event(event).await
         }
         CurveEventType::CurveSync(sync) => {
             let key = EventBufferKey {
@@ -903,14 +903,14 @@ async fn handle_v2_curve_event(event: CurveEventType) -> Result<()> {
                 token: sync.token.clone(),
             };
             info!(
-                "📥 V2 Sync event: tx={}, tx_idx={}, log_idx={}, token={}",
+                "📥 Sync event: tx={}, tx_idx={}, log_idx={}, token={}",
                 sync.transaction_hash, sync.transaction_index, sync.log_index, sync.token
             );
             process_sync_event(event.clone(), sync.clone(), key, buffer).await?;
-            receive_v2_curve_event(event).await
+            receive_curve_event(event).await
         }
         // CreateCurve, Graduate 등 다른 이벤트는 그대로 전송
-        _ => receive_v2_curve_event(event).await,
+        _ => receive_curve_event(event).await,
     }
 }
 
@@ -984,7 +984,7 @@ async fn drain_ready_chart_updates(
         }
 
         info!(
-            "🔍 V2 Buffer check: tx={}, tx_idx={}, trades={}, syncs={}, ready_updates={}",
+            "🔍 Buffer check: tx={}, tx_idx={}, trades={}, syncs={}, ready_updates={}",
             key.transaction_hash,
             key.transaction_index,
             entry.trades.len(),
@@ -995,7 +995,7 @@ async fn drain_ready_chart_updates(
         remove_empty_buffer = entry.trades.is_empty() && entry.syncs.is_empty();
     } else {
         info!(
-            "⚠️  V2 Buffer miss: tx={}, tx_idx={} not found in buffer",
+            "⚠️  Buffer miss: tx={}, tx_idx={} not found in buffer",
             key.transaction_hash, key.transaction_index
         );
     }
@@ -1006,12 +1006,12 @@ async fn drain_ready_chart_updates(
 
     for chart_update in chart_updates {
         info!(
-            "🎯 V2 CurveChartUpdate created: tx={}, token={}",
+            "🎯 CurveChartUpdate created: tx={}, token={}",
             chart_update.transaction_hash, chart_update.sync.token
         );
 
-        use crate::stream::v2::curve::receive::handle_v2_chart_update_event;
-        handle_v2_chart_update_event(chart_update).await?;
+        use crate::stream::curve::receive::handle_chart_update_event;
+        handle_chart_update_event(chart_update).await?;
     }
 
     Ok(())
@@ -1236,7 +1236,7 @@ mod tests {
     }
 
     #[test]
-    fn v2_curve_pair_uses_closest_previous_sync() {
+    fn curve_pair_uses_closest_previous_sync() {
         let entry = TransactionEventBuffer {
             trades: vec![buy_at(15)],
             syncs: vec![sync_at(10), sync_at(14), sync_at(16)],
@@ -1247,7 +1247,7 @@ mod tests {
     }
 
     #[test]
-    fn v2_curve_pair_ignores_future_sync() {
+    fn curve_pair_ignores_future_sync() {
         let entry = TransactionEventBuffer {
             trades: vec![buy_at(15)],
             syncs: vec![sync_at(16)],
