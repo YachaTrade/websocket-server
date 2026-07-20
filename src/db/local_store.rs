@@ -53,15 +53,15 @@ pub struct TokenMarketData {
     pub holder_count: i64,
     pub is_graduated: bool,
     /// 마켓 타입 (Curve/Dex)
-    /// is_graduated만으로는 V1/V2 구분이 불가능하므로 별도 보관
-    /// (이전엔 get 시점에 is_graduated 기반으로 Curve/Dex로 derive했으나
-    ///  V2 정보가 손실되어 socket으로 V2 토큰이 Curve로 잘못 내려가던 버그 수정)
+    /// 현재는 is_graduated와 1:1 대응이라 값 자체는 중복이지만, socket 응답이
+    /// 이 필드를 그대로 내려주므로 조회 시점에 derive하지 않고 저장해 둔다.
+    /// (derive하던 시절 graduate 후에도 Dex 토큰이 Curve로 내려가는 버그가 있었다)
     #[serde(default)]
     pub market_type: crate::types::MarketType,
     /// total_supply, holder_count 마지막 갱신 시각 (unix timestamp)
     #[serde(skip)]
     pub last_stats_update: i64,
-    /// Fee 설정 정보 (V2 전용, V1은 None)
+    /// Fee 설정 정보 (fee_config 행이 없으면 None)
     pub fee_info: Option<crate::types::FeeInfo>,
 }
 

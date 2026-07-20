@@ -7,7 +7,7 @@ use websocket_server::{
     db::{cache::CacheManager, postgres::PostgresDatabase, redis::RedisDatabase},
     event::{self},
     metrics, server,
-    stream::{v1::dex, v2::curve as v2_curve, handler::run_event_handler, price},
+    stream::{curve, dex, handler::run_event_handler, price},
     types::stream::EventType,
 };
 
@@ -68,7 +68,7 @@ async fn main() -> anyhow::Result<()> {
     }
 
     let mut set = JoinSet::new();
-    set.spawn(run_event_handler::<v2_curve::V2CurveEventHandler>(
+    set.spawn(run_event_handler::<curve::CurveEventHandler>(
         EventType::Curve,
     ));
     set.spawn(run_event_handler::<dex::DexEventHandler>(EventType::Dex));

@@ -15,27 +15,27 @@ use anyhow::Result;
 use crate::error_log;
 use tracing::{info, instrument};
 
-/// V2 Curve 이벤트 수신 및 처리 (enum으로 최적화)
+/// Curve 이벤트 수신 및 처리 (enum으로 최적화)
 #[instrument(skip(event))]
-pub async fn receive_v2_curve_event(event: CurveEventType) -> Result<()> {
+pub async fn receive_curve_event(event: CurveEventType) -> Result<()> {
     let start_time = Instant::now();
 
     // 패턴 매칭으로 이벤트 처리 (HashMap 간접 호출 제거)
     match event {
-        CurveEventType::CreateCurve(e) => handle_v2_create_curve_event(e).await?,
-        CurveEventType::Buy(e) => handle_v2_buy_event(e).await?,
-        CurveEventType::Sell(e) => handle_v2_sell_event(e).await?,
-        CurveEventType::CurveSync(e) => handle_v2_sync_event(e).await?,
-        CurveEventType::Graduate(e) => handle_v2_graduate_event(e).await?,
-        CurveEventType::CurveChartUpdate(e) => handle_v2_chart_update_event(e).await?,
+        CurveEventType::CreateCurve(e) => handle_create_curve_event(e).await?,
+        CurveEventType::Buy(e) => handle_buy_event(e).await?,
+        CurveEventType::Sell(e) => handle_sell_event(e).await?,
+        CurveEventType::CurveSync(e) => handle_sync_event(e).await?,
+        CurveEventType::Graduate(e) => handle_graduate_event(e).await?,
+        CurveEventType::CurveChartUpdate(e) => handle_chart_update_event(e).await?,
     }
 
-    tracing::debug!("Single V2 Curve event processed in {:?}", start_time.elapsed());
+    tracing::debug!("Single Curve event processed in {:?}", start_time.elapsed());
     Ok(())
 }
 
 #[instrument(skip(create_curve))]
-pub async fn handle_v2_create_curve_event(create_curve: CreateCurve) -> Result<()> {
+pub async fn handle_create_curve_event(create_curve: CreateCurve) -> Result<()> {
     let time = Instant::now();
 
     // 모든 이벤트 프로듀서 초기화 - 에러 처리로 변경
@@ -83,7 +83,7 @@ pub async fn handle_v2_create_curve_event(create_curve: CreateCurve) -> Result<(
             {
                 Ok(_) => Ok(()),
                 Err(tokio::sync::mpsc::error::TrySendError::Full(_)) => {
-                    tracing::warn!("Order producer channel full, skipping V2 Curve create curve event");
+                    tracing::warn!("Order producer channel full, skipping Curve create curve event");
                     Ok(())
                 }
                 Err(tokio::sync::mpsc::error::TrySendError::Closed(_)) => {
@@ -98,7 +98,7 @@ pub async fn handle_v2_create_curve_event(create_curve: CreateCurve) -> Result<(
             {
                 Ok(_) => Ok(()),
                 Err(tokio::sync::mpsc::error::TrySendError::Full(_)) => {
-                    tracing::warn!("Chart producer channel full, skipping V2 Curve create curve event");
+                    tracing::warn!("Chart producer channel full, skipping Curve create curve event");
                     Ok(())
                 }
                 Err(tokio::sync::mpsc::error::TrySendError::Closed(_)) => {
@@ -113,7 +113,7 @@ pub async fn handle_v2_create_curve_event(create_curve: CreateCurve) -> Result<(
             {
                 Ok(_) => Ok(()),
                 Err(tokio::sync::mpsc::error::TrySendError::Full(_)) => {
-                    tracing::warn!("Metrics producer channel full, skipping V2 Curve create curve event");
+                    tracing::warn!("Metrics producer channel full, skipping Curve create curve event");
                     Ok(())
                 }
                 Err(tokio::sync::mpsc::error::TrySendError::Closed(_)) => {
@@ -128,7 +128,7 @@ pub async fn handle_v2_create_curve_event(create_curve: CreateCurve) -> Result<(
             {
                 Ok(_) => Ok(()),
                 Err(tokio::sync::mpsc::error::TrySendError::Full(_)) => {
-                    tracing::warn!("Market producer channel full, skipping V2 Curve create curve event");
+                    tracing::warn!("Market producer channel full, skipping Curve create curve event");
                     Ok(())
                 }
                 Err(tokio::sync::mpsc::error::TrySendError::Closed(_)) => {
@@ -159,7 +159,7 @@ pub async fn handle_v2_create_curve_event(create_curve: CreateCurve) -> Result<(
     // Arc 안의 데이터 참조
     if let CurveEventType::CreateCurve(ref create_curve_ref) = *create_event {
         info!(
-            "V2 Curve Create Curve event handled successfully: token={} in {:?} ms",
+            "Curve Create Curve event handled successfully: token={} in {:?} ms",
             create_curve_ref.token,
             time.elapsed()
         );
@@ -169,7 +169,7 @@ pub async fn handle_v2_create_curve_event(create_curve: CreateCurve) -> Result<(
 }
 
 #[instrument(skip(buy))]
-pub async fn handle_v2_buy_event(buy: Buy) -> Result<()> {
+pub async fn handle_buy_event(buy: Buy) -> Result<()> {
     let time = Instant::now();
 
     // Arc로 zero-copy 공유
@@ -217,7 +217,7 @@ pub async fn handle_v2_buy_event(buy: Buy) -> Result<()> {
             {
                 Ok(_) => Ok(()),
                 Err(tokio::sync::mpsc::error::TrySendError::Full(_)) => {
-                    tracing::warn!("Order producer channel full, skipping V2 Curve buy event");
+                    tracing::warn!("Order producer channel full, skipping Curve buy event");
                     Ok(())
                 }
                 Err(tokio::sync::mpsc::error::TrySendError::Closed(_)) => {
@@ -232,7 +232,7 @@ pub async fn handle_v2_buy_event(buy: Buy) -> Result<()> {
             {
                 Ok(_) => Ok(()),
                 Err(tokio::sync::mpsc::error::TrySendError::Full(_)) => {
-                    tracing::warn!("SWAP producer channel full, skipping V2 Curve buy event");
+                    tracing::warn!("SWAP producer channel full, skipping Curve buy event");
                     Ok(())
                 }
                 Err(tokio::sync::mpsc::error::TrySendError::Closed(_)) => {
@@ -247,7 +247,7 @@ pub async fn handle_v2_buy_event(buy: Buy) -> Result<()> {
             {
                 Ok(_) => Ok(()),
                 Err(tokio::sync::mpsc::error::TrySendError::Full(_)) => {
-                    tracing::warn!("Metrics producer channel full, skipping V2 Curve buy event");
+                    tracing::warn!("Metrics producer channel full, skipping Curve buy event");
                     Ok(())
                 }
                 Err(tokio::sync::mpsc::error::TrySendError::Closed(_)) => {
@@ -262,7 +262,7 @@ pub async fn handle_v2_buy_event(buy: Buy) -> Result<()> {
             {
                 Ok(_) => Ok(()),
                 Err(tokio::sync::mpsc::error::TrySendError::Full(_)) => {
-                    tracing::warn!("Market producer channel full, skipping V2 Curve buy event");
+                    tracing::warn!("Market producer channel full, skipping Curve buy event");
                     Ok(())
                 }
                 Err(tokio::sync::mpsc::error::TrySendError::Closed(_)) => {
@@ -293,7 +293,7 @@ pub async fn handle_v2_buy_event(buy: Buy) -> Result<()> {
     // Arc 안의 데이터 참조
     if let CurveEventType::Buy(ref buy_ref) = *buy_event {
         info!(
-            "V2 Curve Buy event handled successfully: token={} in {:?} ms",
+            "Curve Buy event handled successfully: token={} in {:?} ms",
             buy_ref.token,
             time.elapsed()
         );
@@ -302,7 +302,7 @@ pub async fn handle_v2_buy_event(buy: Buy) -> Result<()> {
 }
 
 #[instrument(skip(sell))]
-pub async fn handle_v2_sell_event(sell: Sell) -> Result<()> {
+pub async fn handle_sell_event(sell: Sell) -> Result<()> {
     let time = Instant::now();
 
     // Arc로 zero-copy 공유
@@ -350,7 +350,7 @@ pub async fn handle_v2_sell_event(sell: Sell) -> Result<()> {
             {
                 Ok(_) => Ok(()),
                 Err(tokio::sync::mpsc::error::TrySendError::Full(_)) => {
-                    tracing::warn!("Order producer channel full, skipping V2 Curve sell event");
+                    tracing::warn!("Order producer channel full, skipping Curve sell event");
                     Ok(())
                 }
                 Err(tokio::sync::mpsc::error::TrySendError::Closed(_)) => {
@@ -365,7 +365,7 @@ pub async fn handle_v2_sell_event(sell: Sell) -> Result<()> {
             {
                 Ok(_) => Ok(()),
                 Err(tokio::sync::mpsc::error::TrySendError::Full(_)) => {
-                    tracing::warn!("Token producer channel full, skipping V2 Curve sell event");
+                    tracing::warn!("Token producer channel full, skipping Curve sell event");
                     Ok(())
                 }
                 Err(tokio::sync::mpsc::error::TrySendError::Closed(_)) => {
@@ -380,7 +380,7 @@ pub async fn handle_v2_sell_event(sell: Sell) -> Result<()> {
             {
                 Ok(_) => Ok(()),
                 Err(tokio::sync::mpsc::error::TrySendError::Full(_)) => {
-                    tracing::warn!("Metrics producer channel full, skipping V2 Curve sell event");
+                    tracing::warn!("Metrics producer channel full, skipping Curve sell event");
                     Ok(())
                 }
                 Err(tokio::sync::mpsc::error::TrySendError::Closed(_)) => {
@@ -395,7 +395,7 @@ pub async fn handle_v2_sell_event(sell: Sell) -> Result<()> {
             {
                 Ok(_) => Ok(()),
                 Err(tokio::sync::mpsc::error::TrySendError::Full(_)) => {
-                    tracing::warn!("Market producer channel full, skipping V2 Curve sell event");
+                    tracing::warn!("Market producer channel full, skipping Curve sell event");
                     Ok(())
                 }
                 Err(tokio::sync::mpsc::error::TrySendError::Closed(_)) => {
@@ -426,7 +426,7 @@ pub async fn handle_v2_sell_event(sell: Sell) -> Result<()> {
     // Arc 안의 데이터 참조
     if let CurveEventType::Sell(ref sell_ref) = *sell_event {
         info!(
-            "V2 Curve Sell event handled successfully: token={} in {:?} ms",
+            "Curve Sell event handled successfully: token={} in {:?} ms",
             sell_ref.token,
             time.elapsed()
         );
@@ -435,7 +435,7 @@ pub async fn handle_v2_sell_event(sell: Sell) -> Result<()> {
 }
 
 #[instrument(skip(sync))]
-pub async fn handle_v2_sync_event(sync: CurveSync) -> Result<()> {
+pub async fn handle_sync_event(sync: CurveSync) -> Result<()> {
     let time = Instant::now();
 
     // 모든 이벤트 프로듀서 초기화 - 에러 처리로 변경 (Chart는 stream에서 CurveChartUpdate로 처리)
@@ -480,15 +480,15 @@ pub async fn handle_v2_sync_event(sync: CurveSync) -> Result<()> {
     match metrics_result {
         Ok(Ok(_)) => {}
         Ok(Err(e)) => {
-            error_log!("Failed to send V2 Curve sync event to metrics producer: {}", e);
+            error_log!("Failed to send Curve sync event to metrics producer: {}", e);
             return Err(anyhow::anyhow!(
-                "Failed to send V2 Curve sync event to metrics producer: channel closed"
+                "Failed to send Curve sync event to metrics producer: channel closed"
             ));
         }
         Err(_) => {
-            error_log!("Timeout (500ms) sending V2 Curve sync event to metrics producer");
+            error_log!("Timeout (500ms) sending Curve sync event to metrics producer");
             return Err(anyhow::anyhow!(
-                "Timeout sending V2 Curve sync event to metrics producer"
+                "Timeout sending Curve sync event to metrics producer"
             ));
         }
     }
@@ -496,15 +496,15 @@ pub async fn handle_v2_sync_event(sync: CurveSync) -> Result<()> {
     match market_result {
         Ok(Ok(_)) => {}
         Ok(Err(e)) => {
-            error_log!("Failed to send V2 Curve sync event to market producer: {}", e);
+            error_log!("Failed to send Curve sync event to market producer: {}", e);
             return Err(anyhow::anyhow!(
-                "Failed to send V2 Curve sync event to market producer: channel closed"
+                "Failed to send Curve sync event to market producer: channel closed"
             ));
         }
         Err(_) => {
-            error_log!("Timeout (500ms) sending V2 Curve sync event to market producer");
+            error_log!("Timeout (500ms) sending Curve sync event to market producer");
             return Err(anyhow::anyhow!(
-                "Timeout sending V2 Curve sync event to market producer"
+                "Timeout sending Curve sync event to market producer"
             ));
         }
     }
@@ -512,7 +512,7 @@ pub async fn handle_v2_sync_event(sync: CurveSync) -> Result<()> {
     // Arc 안의 데이터 참조
     if let CurveEventType::CurveSync(ref sync_ref) = *sync_event {
         info!(
-            "V2 Curve Sync event handled successfully: {:?} in {:?} ms",
+            "Curve Sync event handled successfully: {:?} in {:?} ms",
             sync_ref,
             time.elapsed()
         );
@@ -521,7 +521,7 @@ pub async fn handle_v2_sync_event(sync: CurveSync) -> Result<()> {
 }
 
 #[instrument(skip(chart_update))]
-pub async fn handle_v2_chart_update_event(chart_update: CurveChartUpdate) -> Result<()> {
+pub async fn handle_chart_update_event(chart_update: CurveChartUpdate) -> Result<()> {
     let time = Instant::now();
 
     // Chart producer에만 전송
@@ -547,15 +547,15 @@ pub async fn handle_v2_chart_update_event(chart_update: CurveChartUpdate) -> Res
     match chart_task.await {
         Ok(Ok(_)) => {}
         Ok(Err(e)) => {
-            error_log!("Failed to send V2 Curve chart update to chart producer: {}", e);
+            error_log!("Failed to send Curve chart update to chart producer: {}", e);
             return Err(anyhow::anyhow!(
-                "Failed to send V2 Curve chart update to chart producer: channel closed"
+                "Failed to send Curve chart update to chart producer: channel closed"
             ));
         }
         Err(_) => {
-            error_log!("Timeout (500ms) sending V2 Curve chart update to chart producer");
+            error_log!("Timeout (500ms) sending Curve chart update to chart producer");
             return Err(anyhow::anyhow!(
-                "Timeout sending V2 Curve chart update to chart producer"
+                "Timeout sending Curve chart update to chart producer"
             ));
         }
     }
@@ -563,7 +563,7 @@ pub async fn handle_v2_chart_update_event(chart_update: CurveChartUpdate) -> Res
     // Arc 안의 데이터 참조
     if let CurveEventType::CurveChartUpdate(ref chart_ref) = *chart_event {
         info!(
-            "V2 Curve CurveChartUpdate handled successfully: tx={}, token={} in {:?} ms",
+            "Curve CurveChartUpdate handled successfully: tx={}, token={} in {:?} ms",
             chart_ref.transaction_hash,
             chart_ref.sync.token,
             time.elapsed()
@@ -573,7 +573,7 @@ pub async fn handle_v2_chart_update_event(chart_update: CurveChartUpdate) -> Res
 }
 
 #[instrument(skip(graduate))]
-pub async fn handle_v2_graduate_event(graduate: Graduate) -> Result<()> {
+pub async fn handle_graduate_event(graduate: Graduate) -> Result<()> {
     let time = Instant::now();
 
     // Market Producer에 Graduate 이벤트 전송
@@ -598,7 +598,7 @@ pub async fn handle_v2_graduate_event(graduate: Graduate) -> Result<()> {
         Ok(_) => {
             if let CurveEventType::Graduate(ref grad_ref) = *graduate_event {
                 info!(
-                    "V2 Curve Graduate event sent to market producer: token={}, pool={}",
+                    "Curve Graduate event sent to market producer: token={}, pool={}",
                     grad_ref.token, grad_ref.pool
                 );
             }
@@ -606,7 +606,7 @@ pub async fn handle_v2_graduate_event(graduate: Graduate) -> Result<()> {
         Err(tokio::sync::mpsc::error::TrySendError::Full(_)) => {
             if let CurveEventType::Graduate(ref grad_ref) = *graduate_event {
                 tracing::warn!(
-                    "Market producer channel full, skipping V2 Curve graduate event for token {}",
+                    "Market producer channel full, skipping Curve graduate event for token {}",
                     grad_ref.token
                 );
             }
@@ -618,7 +618,7 @@ pub async fn handle_v2_graduate_event(graduate: Graduate) -> Result<()> {
 
     if let CurveEventType::Graduate(ref grad_ref) = *graduate_event {
         info!(
-            "V2 Curve Graduate event handled successfully: token={}, pool={} in {:?}",
+            "Curve Graduate event handled successfully: token={}, pool={} in {:?}",
             grad_ref.token,
             grad_ref.pool,
             time.elapsed()

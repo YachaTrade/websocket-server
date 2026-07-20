@@ -27,9 +27,9 @@ pub fn get_instance_id() -> &'static str {
 
 /// 모든 Redis 키 앞에 붙는 글로벌 prefix.
 ///
-/// 같은 Redis 인스턴스에 v1/v2 등 다중 배포가 공존할 때 키 충돌을 막기 위해 사용.
+/// 같은 Redis 인스턴스에 여러 배포가 공존할 때 키 충돌을 막기 위해 사용.
 /// - env `REDIS_KEY_PREFIX` 미설정/빈 문자열: 빈 문자열 반환 (prefix 없음)
-/// - env `REDIS_KEY_PREFIX="V2"`: `"V2:"` 반환 (모든 키 앞에 `V2:` 부착)
+/// - env `REDIS_KEY_PREFIX="giwa"`: `"giwa:"` 반환 (모든 키 앞에 `giwa:` 부착)
 ///
 /// trailing colon 자동 부착이라 호출자는 그대로 prepend만 하면 된다.
 pub fn redis_key_prefix() -> &'static str {
@@ -46,21 +46,19 @@ pub fn redis_key_prefix() -> &'static str {
 }
 
 lazy_static! {
-    pub static ref V1_DEX_FACTORY_ADDRESS: String =
-        env::var("V1_DEX_FACTORY").expect("V1_DEX_FACTORY must be set");
     pub static ref WETH_ADDRESS: String = env::var("WETH").expect("WETH must be set");
 }
 
-// V2 컨트랙트 주소
+// 컨트랙트 주소
 lazy_static! {
-    pub static ref V2_BONDING_CURVE_ADDRESS: String =
-        env::var("V2_BONDING_CURVE").expect("V2_BONDING_CURVE must be set");
-    // V2 Vault 주소 (없으면 빈 문자열 — actor 판별에서 미매칭 처리)
+    pub static ref BONDING_CURVE_ADDRESS: String =
+        env::var("BONDING_CURVE").expect("BONDING_CURVE must be set");
+    // Vault 주소 (없으면 빈 문자열 — actor 판별에서 미매칭 처리)
     // GIFT/BURN vault가 buyback/gift 누적 목적으로 buy/sell할 때 actor로 인정하기 위해 사용
-    pub static ref V2_GIFT_VAULT_ADDRESS: String =
-        env::var("V2_GIFT_VAULT").unwrap_or_default();
-    pub static ref V2_BURN_VAULT_ADDRESS: String =
-        env::var("V2_BURN_VAULT").unwrap_or_default();
+    pub static ref GIFT_VAULT_ADDRESS: String =
+        env::var("GIFT_VAULT").unwrap_or_default();
+    pub static ref BURN_VAULT_ADDRESS: String =
+        env::var("BURN_VAULT").unwrap_or_default();
 }
 
 // Native 토큰 Decimals (10^18)
