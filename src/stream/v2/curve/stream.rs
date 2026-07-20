@@ -402,7 +402,6 @@ async fn parse_log(
                     created_at: block_timestamp as i64,
                     creator: account_info,
                     is_cto: false,
-                    version: crate::types::TokenVersion::V2,
                 };
 
                 // Price = virtual_quote / virtual_token (1 token을 사는데 필요한 quote 양)
@@ -525,7 +524,6 @@ async fn parse_log(
                 transaction_index,
                 quote_token: quoteToken.to_string(),
                 pair: Some(pair.to_string()),
-                version: crate::types::TokenVersion::V2,
             };
 
             info!(

@@ -28,15 +28,6 @@ pub struct TokenInfo {
     pub created_at: i64,
     pub creator: AccountInfo,
     pub is_cto: bool,
-    pub version: TokenVersion,
-}
-
-/// Token version enum: V2 migration에서 token.version 컬럼 대응
-#[derive(Debug, Clone, Serialize, Deserialize, sqlx::Type, PartialEq)]
-#[sqlx(type_name = "VARCHAR")]
-pub enum TokenVersion {
-    V1,
-    V2,
 }
 
 /// Account information
@@ -158,7 +149,34 @@ pub struct SwapInfo {
 
 #[cfg(test)]
 mod market_type_tests {
-    use super::MarketType;
+    use super::{AccountInfo, MarketType, TokenInfo};
+
+    #[test]
+    fn token_info_wire_payload_omits_version() {
+        let token = TokenInfo {
+            token_id: "token".to_string(),
+            name: "Token".to_string(),
+            symbol: "TKN".to_string(),
+            image_uri: "image".to_string(),
+            description: None,
+            is_graduated: false,
+            is_nsfw: false,
+            twitter: None,
+            telegram: None,
+            website: None,
+            created_at: 0,
+            creator: AccountInfo {
+                account_id: "creator".to_string(),
+                nickname: "Creator".to_string(),
+                bio: String::new(),
+                image_uri: String::new(),
+            },
+            is_cto: false,
+        };
+
+        let payload = serde_json::to_value(token).unwrap();
+        assert!(payload.get("version").is_none());
+    }
 
     // giwa: market_type wire 값은 CURVE/DEX 두 개뿐 (V2 prefix 제거).
     // observer giwa 브랜치가 DB market.market_type에 쓰는 값과 일치해야 한다.
