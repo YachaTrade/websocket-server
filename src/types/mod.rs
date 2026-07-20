@@ -57,17 +57,6 @@ pub struct QuoteInfo {
     pub image_uri: String,
 }
 
-/// Fee 설정 정보
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct FeeInfo {
-    /// 크리에이터 수수료율 (basis points)
-    pub creator_fee_rate: i16,
-    /// 커브 프로토콜 수수료율 (basis points)
-    pub curve_protocol_fee_rate: i16,
-    /// DEX 프로토콜 수수료율 (basis points)
-    pub dex_protocol_fee_rate: i16,
-}
-
 /// Market information with pricing data
 #[derive(Debug, Clone, Serialize, Deserialize)]
 
@@ -116,8 +105,6 @@ pub struct MarketInfo {
     /// Last stats update timestamp (holder_count, total_supply) - not serialized
     #[serde(skip_serializing, default)]
     pub last_stats_update: i64,
-    /// Fee 설정 정보 (fee_config 행이 없으면 null)
-    pub fee_info: Option<FeeInfo>,
 }
 
 /// Swap event type enum
