@@ -228,8 +228,7 @@ impl CacheManager {
 
         while retry_count < max_retries {
             // PostgreSQL 쿼리 실행
-            let query =
-                r#"SELECT pool_id FROM market WHERE token_id = $1 AND market_type = 'UNISWAPV3'"#;
+            let query = r#"SELECT pool_id FROM market WHERE token_id = $1 AND market_type = 'DEX'"#;
             match measure_postgres!(
                 "get_token_pool",
                 sqlx::query(query)
@@ -305,7 +304,7 @@ impl CacheManager {
         while retry_count < max_retries {
             // PostgreSQL 쿼리 실행
             info!("Checking POOL existence in PostgreSQL: {}", pool);
-            let query = r#"SELECT EXISTS(SELECT 1 FROM market WHERE pool_id = $1 AND market_type IN ('UNISWAPV3', 'V2_DEX')) as exists"#;
+            let query = r#"SELECT EXISTS(SELECT 1 FROM market WHERE pool_id = $1 AND market_type IN ('DEX', 'V2_DEX')) as exists"#;
             match measure_postgres!(
                 "check_white_list_pool",
                 sqlx::query(query).bind(pool).fetch_one(&self.postgres.pool)
