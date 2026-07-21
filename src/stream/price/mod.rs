@@ -32,10 +32,10 @@ lazy_static! {
     pub static ref QUOTE_FEED_IDS: Arc<DashMap<String, String>> = Arc::new(DashMap::new());
 }
 
-/// Native(MON) Pyth feed ID. Always fetched alongside any registered quote
-/// feeds in each polling cycle.
+/// Native(ETH) Pyth feed ID — Crypto.ETH/USD. Always fetched alongside any
+/// registered quote feeds in each polling cycle. Must match observer's value.
 const NATIVE_FEED_ID: &str =
-    "0x31491744e2dbf6df7fcf4ac0820d18a609b49076d45066d3568424e62f686cd1";
+    "0xff61491a931112ddf1bd8147cd1b641375f79f5825126d665480874634fd0ace";
 
 /// Polling cadence — 10s, observer 의 NORMALIZE_WINDOW_SECS 와 동일.
 ///
@@ -143,14 +143,9 @@ pub async fn start_update_price() -> Result<()> {
     let provider: Arc<dyn PriceProvider> =
         build_provider().context("Failed to build PriceProvider")?;
     let client = RpcClient::instance().context("RpcClient not initialized")?;
-    let mode = std::env::var("MODE").unwrap_or_else(|_| "mainnet".to_string());
-    let testnet = mode.to_lowercase() == "testnet";
 
     tokio::spawn(async move {
-        info!(
-            "🚀 Price monitor started (mode={}, batch fetch via PriceProvider)",
-            mode
-        );
+        info!("🚀 Price monitor started (Pyth batch fetch)");
 
         loop {
             // 모든 등록된 feed_id 수집 (native + quote tokens).
@@ -179,7 +174,7 @@ pub async fn start_update_price() -> Result<()> {
                     if let Some(price) = prices.get(&native_key) {
                         set_native_price(price.clone()).await;
                         info!("💰 Native price updated: ${}", price);
-                    } else if !testnet {
+                    } else {
                         warn!("⚠️  Pyth response missing native feed");
                     }
 
