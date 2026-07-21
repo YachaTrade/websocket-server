@@ -2,28 +2,6 @@ use bigdecimal::BigDecimal;
 use lazy_static::lazy_static;
 use once_cell::sync::OnceCell;
 use std::{env, str::FromStr};
-use uuid::Uuid;
-
-/// 서버 인스턴스 고유 ID (서버 시작 시 생성되는 UUID)
-/// Redis key에 포함되어 여러 ECS task 간 데이터 충돌 방지
-static INSTANCE_ID: OnceCell<String> = OnceCell::new();
-
-/// 서버 인스턴스 ID 초기화 (main에서 한 번만 호출)
-pub fn init_instance_id() -> String {
-    let id = Uuid::new_v4().to_string();
-    INSTANCE_ID
-        .set(id.clone())
-        .expect("INSTANCE_ID already initialized");
-    tracing::info!("🆔 Server Instance ID initialized: {}", id);
-    id
-}
-
-/// 서버 인스턴스 ID 가져오기
-pub fn get_instance_id() -> &'static str {
-    INSTANCE_ID
-        .get()
-        .expect("INSTANCE_ID not initialized. Call init_instance_id() first")
-}
 
 /// 모든 Redis 키 앞에 붙는 글로벌 prefix.
 ///
