@@ -44,18 +44,9 @@ pub trait PriceProvider: Send + Sync {
     ) -> Result<HashMap<String, BigDecimal>>;
 }
 
-/// Build the provider selected by runtime env (`MODE`).
-///
-/// - `MODE=testnet` → [`mock::MockProvider`] with a fixed 0.03 price,
-///   preserving the legacy testnet hardcoded value.
-/// - otherwise      → [`pyth::PythProvider`] backed by the Pyth Hermes API.
+/// Build the price provider. Always Pyth Hermes-backed [`pyth::PythProvider`].
+/// ([`mock::MockProvider`] is retained for unit tests only.)
 pub fn build_provider() -> Result<Arc<dyn PriceProvider>> {
-    let mode = std::env::var("MODE").unwrap_or_else(|_| "mainnet".to_string());
-    if mode.to_lowercase() == "testnet" {
-        tracing::info!("[PRICE] Using MockProvider (MODE=testnet)");
-        Ok(Arc::new(mock::MockProvider::fixed_str("0.03")))
-    } else {
-        tracing::info!("[PRICE] Using PythProvider (MODE={})", mode);
-        Ok(Arc::new(pyth::PythProvider::new()?))
-    }
+    tracing::info!("[PRICE] Using PythProvider");
+    Ok(Arc::new(pyth::PythProvider::new()?))
 }
