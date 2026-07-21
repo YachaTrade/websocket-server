@@ -14,7 +14,7 @@ use crate::config::{
     REDIS_COMMAND_TIMEOUT_MS, TOKEN_INFO_EXPIRATION, WHITELIST_EXPIRATION,
 };
 
-// Redis에 저장할 데이터 유형별 키 접두사 (v5: 모든 키에 instance_id 추가 - ECS multi-region 지원)
+// Redis에 저장할 데이터 유형별 키 접두사
 const PREFIX_WHITE_LIST_TOKEN: &str = "white_list_token:";
 const PREFIX_WHITE_LIST_POOL: &str = "white_list_pool:";
 
@@ -227,8 +227,7 @@ impl RedisDatabase {
     /// 화이트리스트에 토큰 추가
     pub async fn insert_white_list_token(&self, token: &str, is_white: bool) -> Result<()> {
         let mut conn = self.get_conn();
-        let instance_id = crate::config::get_instance_id();
-        let key = with_prefix(format!("{}{}:{}", PREFIX_WHITE_LIST_TOKEN, instance_id, token));
+        let key = with_prefix(format!("{}{}", PREFIX_WHITE_LIST_TOKEN, token));
 
         measure_redis!(
             "redis_set_ex",
@@ -249,8 +248,7 @@ impl RedisDatabase {
     /// 토큰이 화이트리스트에 있는지 확인
     pub async fn check_white_list_token(&self, token: &str) -> Result<Option<bool>> {
         let mut conn = self.get_conn();
-        let instance_id = crate::config::get_instance_id();
-        let key = with_prefix(format!("{}{}:{}", PREFIX_WHITE_LIST_TOKEN, instance_id, token));
+        let key = with_prefix(format!("{}{}", PREFIX_WHITE_LIST_TOKEN, token));
 
         let exists: Option<bool> = measure_redis!("redis_get", conn.get(&key)).map_err(|e| {
             error_log!("Failed to check white list token in Redis: {}", e);
@@ -274,8 +272,7 @@ impl RedisDatabase {
     /// 토큰 개발자 정보 저장
     pub async fn insert_token_dev(&self, token: &str, account: &str) -> Result<()> {
         let mut conn = self.get_conn();
-        let instance_id = crate::config::get_instance_id();
-        let key = with_prefix(format!("{}{}:{}", PREFIX_TOKEN_DEV, instance_id, token));
+        let key = with_prefix(format!("{}{}", PREFIX_TOKEN_DEV, token));
 
         measure_redis!(
             "redis_set_ex",
@@ -296,8 +293,7 @@ impl RedisDatabase {
     /// 계정이 토큰의 개발자인지 확인
     pub async fn check_token_dev(&self, token: &str, account: &str) -> Result<bool> {
         let mut conn = self.get_conn();
-        let instance_id = crate::config::get_instance_id();
-        let key = with_prefix(format!("{}{}:{}", PREFIX_TOKEN_DEV, instance_id, token));
+        let key = with_prefix(format!("{}{}", PREFIX_TOKEN_DEV, token));
 
         let dev: Option<String> = measure_redis!("redis_get", conn.get(&key)).map_err(|e| {
             error_log!("Failed to get token dev from Redis: {}", e);
@@ -317,8 +313,7 @@ impl RedisDatabase {
     /// 토큰 개발자 정보 조회
     pub async fn get_token_dev(&self, token: &str) -> Result<Option<String>> {
         let mut conn = self.get_conn();
-        let instance_id = crate::config::get_instance_id();
-        let key = with_prefix(format!("{}{}:{}", PREFIX_TOKEN_DEV, instance_id, token));
+        let key = with_prefix(format!("{}{}", PREFIX_TOKEN_DEV, token));
 
         let dev: Option<String> = measure_redis!("redis_get", conn.get(&key)).map_err(|e| {
             error_log!("Failed to get token dev from Redis: {}", e);
@@ -340,8 +335,7 @@ impl RedisDatabase {
     /// 화이트리스트에 POOL 추가
     pub async fn insert_white_list_pool(&self, pool: &str, is_white: bool) -> Result<()> {
         let mut conn = self.get_conn();
-        let instance_id = crate::config::get_instance_id();
-        let key = with_prefix(format!("{}{}:{}", PREFIX_WHITE_LIST_POOL, instance_id, pool));
+        let key = with_prefix(format!("{}{}", PREFIX_WHITE_LIST_POOL, pool));
 
         measure_redis!(
             "redis_set_ex",
@@ -362,8 +356,7 @@ impl RedisDatabase {
     /// POOL가 화이트리스트에 있는지 확인
     pub async fn check_white_list_pool(&self, pool: &str) -> Result<Option<bool>> {
         let mut conn = self.get_conn();
-        let instance_id = crate::config::get_instance_id();
-        let key = with_prefix(format!("{}{}:{}", PREFIX_WHITE_LIST_POOL, instance_id, pool));
+        let key = with_prefix(format!("{}{}", PREFIX_WHITE_LIST_POOL, pool));
 
         let exists: Option<bool> = measure_redis!("redis_get", conn.get(&key)).map_err(|e| {
             error_log!("Failed to check white list pool in Redis: {}", e);
@@ -387,8 +380,7 @@ impl RedisDatabase {
     /// 토큰-POOL 관계 저장
     pub async fn insert_token_pool(&self, token: &str, pool: &str) -> Result<()> {
         let mut conn = self.get_conn();
-        let instance_id = crate::config::get_instance_id();
-        let key = with_prefix(format!("{}{}:{}", PREFIX_TOKEN_POOL, instance_id, token));
+        let key = with_prefix(format!("{}{}", PREFIX_TOKEN_POOL, token));
 
         measure_redis!(
             "redis_set_ex",
@@ -409,8 +401,7 @@ impl RedisDatabase {
     /// 토큰에 대한 POOL 정보 조회
     pub async fn get_token_pool(&self, token: &str) -> Result<Option<String>> {
         let mut conn = self.get_conn();
-        let instance_id = crate::config::get_instance_id();
-        let key = with_prefix(format!("{}{}:{}", PREFIX_TOKEN_POOL, instance_id, token));
+        let key = with_prefix(format!("{}{}", PREFIX_TOKEN_POOL, token));
 
         let pool: Option<String> = measure_redis!("redis_get", conn.get(&key)).map_err(|e| {
             error_log!("Failed to get token pool from Redis: {}", e);
@@ -432,8 +423,7 @@ impl RedisDatabase {
     /// POOL 페어 정보 저장 (token0, token1)
     pub async fn insert_pool_pair(&self, pool: &str, token0: &str, token1: &str) -> Result<()> {
         let mut conn = self.get_conn();
-        let instance_id = crate::config::get_instance_id();
-        let key = with_prefix(format!("{}{}:{}", PREFIX_TOKEN_PAIR, instance_id, pool));
+        let key = with_prefix(format!("{}{}", PREFIX_TOKEN_PAIR, pool));
         let pair_data = format!("{}:{}", token0, token1);
 
         measure_redis!(
@@ -455,8 +445,7 @@ impl RedisDatabase {
     /// POOL 페어 정보 조회
     pub async fn get_pool_pair(&self, pool: &str) -> Result<Option<(String, String)>> {
         let mut conn = self.get_conn();
-        let instance_id = crate::config::get_instance_id();
-        let key = with_prefix(format!("{}{}:{}", PREFIX_TOKEN_PAIR, instance_id, pool));
+        let key = with_prefix(format!("{}{}", PREFIX_TOKEN_PAIR, pool));
 
         let pair_data: Option<String> =
             measure_redis!("redis_get", conn.get(&key)).map_err(|e| {
@@ -501,43 +490,24 @@ impl RedisDatabase {
 
     /// 캐시 통계 조회
     pub async fn get_cache_stats(&self) -> Result<CacheStats> {
-        let instance_id = crate::config::get_instance_id();
         Ok(CacheStats {
             white_list_tokens: self
-                .count_keys(&with_prefix(format!(
-                    "{}{}:*",
-                    PREFIX_WHITE_LIST_TOKEN, instance_id
-                )))
+                .count_keys(&with_prefix(format!("{}*", PREFIX_WHITE_LIST_TOKEN)))
                 .await?,
             white_list_pools: self
-                .count_keys(&with_prefix(format!(
-                    "{}{}:*",
-                    PREFIX_WHITE_LIST_POOL, instance_id
-                )))
+                .count_keys(&with_prefix(format!("{}*", PREFIX_WHITE_LIST_POOL)))
                 .await?,
             token_curves: self
-                .count_keys(&with_prefix(format!(
-                    "{}{}:*",
-                    PREFIX_TOKEN_CURVE, instance_id
-                )))
+                .count_keys(&with_prefix(format!("{}*", PREFIX_TOKEN_CURVE)))
                 .await?,
             token_devs: self
-                .count_keys(&with_prefix(format!(
-                    "{}{}:*",
-                    PREFIX_TOKEN_DEV, instance_id
-                )))
+                .count_keys(&with_prefix(format!("{}*", PREFIX_TOKEN_DEV)))
                 .await?,
             token_pools: self
-                .count_keys(&with_prefix(format!(
-                    "{}{}:*",
-                    PREFIX_TOKEN_POOL, instance_id
-                )))
+                .count_keys(&with_prefix(format!("{}*", PREFIX_TOKEN_POOL)))
                 .await?,
             pool_pairs: self
-                .count_keys(&with_prefix(format!(
-                    "{}{}:*",
-                    PREFIX_TOKEN_PAIR, instance_id
-                )))
+                .count_keys(&with_prefix(format!("{}*", PREFIX_TOKEN_PAIR)))
                 .await?,
             pool_status: self.get_pool_status(),
         })
@@ -562,8 +532,7 @@ impl RedisDatabase {
         account_info: &AccountInfo,
     ) -> Result<()> {
         let mut conn = self.get_conn();
-        let instance_id = crate::config::get_instance_id();
-        let key = with_prefix(format!("{}{}:{}", PREFIX_ACCOUNT_INFO, instance_id, account_id));
+        let key = with_prefix(format!("{}{}", PREFIX_ACCOUNT_INFO, account_id));
         let json = serde_json::to_string(account_info)?;
         measure_redis!(
             "redis_pset_ex",
@@ -583,8 +552,7 @@ impl RedisDatabase {
 
     pub async fn get_account_info(&self, account_id: &str) -> Result<AccountInfo> {
         let mut conn = self.get_conn();
-        let instance_id = crate::config::get_instance_id();
-        let key = with_prefix(format!("{}{}:{}", PREFIX_ACCOUNT_INFO, instance_id, account_id));
+        let key = with_prefix(format!("{}{}", PREFIX_ACCOUNT_INFO, account_id));
 
         // Redis에서 값 조회 (타임아웃 적용)
         let response: Option<String> =
@@ -615,8 +583,7 @@ impl RedisDatabase {
 
     pub async fn get_token_info(&self, token_id: &str) -> Result<TokenInfo> {
         let mut conn = self.get_conn();
-        let instance_id = crate::config::get_instance_id();
-        let key = with_prefix(format!("{}{}:{}", PREFIX_TOKEN_INFO, instance_id, token_id));
+        let key = with_prefix(format!("{}{}", PREFIX_TOKEN_INFO, token_id));
 
         // Redis에서 값 조회 (타임아웃 적용)
         let response: Option<String> =
@@ -649,8 +616,7 @@ impl RedisDatabase {
 
     pub async fn set_token_info(&self, token_id: &str, token_info: &TokenInfo) -> Result<()> {
         let mut conn = self.get_conn();
-        let instance_id = crate::config::get_instance_id();
-        let key = with_prefix(format!("{}{}:{}", PREFIX_TOKEN_INFO, instance_id, token_id));
+        let key = with_prefix(format!("{}{}", PREFIX_TOKEN_INFO, token_id));
         let json = serde_json::to_string(token_info)?;
 
         measure_redis!(
@@ -672,8 +638,7 @@ impl RedisDatabase {
     /// Redis에서 최신 가격 조회
     pub async fn get_latest_price(&self) -> Result<String> {
         let mut conn = self.get_conn();
-        let instance_id = crate::config::get_instance_id();
-        let key = with_prefix(format!("{}{}:", PREFIX_LATEST_PRICE, instance_id));
+        let key = with_prefix(PREFIX_LATEST_PRICE.to_string());
 
         // Redis에서 값 조회
         let response: Option<String> =
@@ -692,8 +657,7 @@ impl RedisDatabase {
     /// Redis에 최신 가격 저장
     pub async fn set_latest_price(&self, price: &str) -> Result<()> {
         let mut conn = self.get_conn();
-        let instance_id = crate::config::get_instance_id();
-        let key = with_prefix(format!("{}{}:", PREFIX_LATEST_PRICE, instance_id));
+        let key = with_prefix(PREFIX_LATEST_PRICE.to_string());
 
         measure_redis!(
             "redis_pset_ex",
@@ -725,8 +689,7 @@ impl RedisDatabase {
     /// Redis에서 토큰 total_supply 조회
     pub async fn get_token_total_supply(&self, token_id: &str) -> Result<String> {
         let mut conn = self.get_conn();
-        let instance_id = crate::config::get_instance_id();
-        let key = with_prefix(format!("{}{}:{}", PREFIX_TOKEN_TOTAL_SUPPLY, instance_id, token_id));
+        let key = with_prefix(format!("{}{}", PREFIX_TOKEN_TOTAL_SUPPLY, token_id));
 
         // Redis에서 값 조회
         let response: Option<String> =
@@ -752,8 +715,7 @@ impl RedisDatabase {
     /// Redis에 토큰 total_supply 저장
     pub async fn set_token_total_supply(&self, token_id: &str, total_supply: &str) -> Result<()> {
         let mut conn = self.get_conn();
-        let instance_id = crate::config::get_instance_id();
-        let key = with_prefix(format!("{}{}:{}", PREFIX_TOKEN_TOTAL_SUPPLY, instance_id, token_id));
+        let key = with_prefix(format!("{}{}", PREFIX_TOKEN_TOTAL_SUPPLY, token_id));
 
         measure_redis!(
             "redis_pset_ex",
@@ -804,8 +766,7 @@ impl RedisDatabase {
     /// EOA or delegated EOA 캐시 저장
     pub async fn insert_is_eoa_or_delegated(&self, address: &str, result: bool) -> Result<()> {
         let mut conn = self.get_conn();
-        let instance_id = crate::config::get_instance_id();
-        let key = with_prefix(format!("{}{}:{}", PREFIX_EOA_DELEGATED, instance_id, address));
+        let key = with_prefix(format!("{}{}", PREFIX_EOA_DELEGATED, address));
 
         measure_redis!(
             "redis_set_ex",
@@ -823,8 +784,7 @@ impl RedisDatabase {
     /// EOA or delegated EOA 캐시 조회
     pub async fn check_is_eoa_or_delegated(&self, address: &str) -> Result<Option<bool>> {
         let mut conn = self.get_conn();
-        let instance_id = crate::config::get_instance_id();
-        let key = with_prefix(format!("{}{}:{}", PREFIX_EOA_DELEGATED, instance_id, address));
+        let key = with_prefix(format!("{}{}", PREFIX_EOA_DELEGATED, address));
 
         let exists: Option<bool> = measure_redis!("redis_get", conn.get(&key)).map_err(|e| {
             error_log!("Failed to check eoa_delegated in Redis: {}", e);

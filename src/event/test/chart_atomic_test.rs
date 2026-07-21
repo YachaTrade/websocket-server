@@ -22,9 +22,6 @@ async fn init_test_env() {
     // .env 파일 로드
     dotenv::dotenv().ok();
 
-    // 서버 인스턴스 ID 초기화 (테스트용 UUID)
-    let _ = crate::config::init_instance_id();
-
     // Redis와 PostgreSQL 초기화
     if let Err(e) = crate::db::redis::RedisDatabase::init().await {
         eprintln!("Redis init failed: {}", e);
