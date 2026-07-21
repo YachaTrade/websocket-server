@@ -1,4 +1,4 @@
-//! In-memory price provider used for testnet runtime and unit tests.
+//! In-memory price provider used for unit tests only.
 
 use std::collections::HashMap;
 use std::str::FromStr;

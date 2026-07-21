@@ -14,13 +14,17 @@ use crate::client::RpcClient;
 use provider::{PriceProvider, build_provider, normalize_feed_id};
 
 lazy_static! {
-    /// 전역 Native(MON) 가격 싱글톤 인스턴스
+    /// 전역 Native(ETH) 가격 싱글톤 인스턴스
     ///
     /// Thread-safe하게 읽기/쓰기 가능
     /// - 읽기: 여러 스레드에서 동시 접근 가능 (매우 빠름)
-    /// - 쓰기: monitor 스레드에서만 1초마다 업데이트
+    /// - 쓰기: monitor 스레드에서만 주기적으로 업데이트
+    ///
+    /// 초기값은 첫 Pyth fetch 전(콜드스타트 ~10s)과 Pyth 장애 지속 시에만 노출되는
+    /// placeholder다. Native가 ETH이므로 대략적인 ETH/USD 값으로 둔다 — 과거 MON
+    /// 기준 $0.03을 그대로 두면 이 구간의 USD 가격이 ~10만배 어긋난다.
     pub static ref NATIVE_PRICE: Arc<RwLock<BigDecimal>> = Arc::new(RwLock::new(
-        BigDecimal::from_str("0.03").unwrap() // 초기값: $0.03
+        BigDecimal::from_str("3000").unwrap() // 초기값: ~$3000/ETH (첫 fetch 시 덮어씀)
     ));
 
     /// Quote token 가격 매핑 (quote_address → USD 가격)
@@ -53,7 +57,7 @@ const POLL_INTERVAL: Duration = Duration::from_secs(10);
 /// 에러 시 다음 retry까지 대기 시간 (provider 내부 backoff에 더해 최후 안전망).
 const ERROR_BACKOFF: Duration = Duration::from_secs(2);
 
-/// Native(MON) 가격 조회
+/// Native(ETH) 가격 조회
 ///
 /// 메모리에서 즉시 반환 (~1μs)
 pub async fn get_native_price() -> BigDecimal {
@@ -133,8 +137,8 @@ async fn pyth_query_ts(client: &RpcClient) -> Result<u64> {
 
 /// Native + Quote Price 업데이트 시작.
 ///
-/// 1초마다 native(MON) feed와 등록된 모든 quote feed를 **단일 batch 요청**으로
-/// 한 번에 가져와 인메모리 캐시(NATIVE_PRICE, QUOTE_PRICES)에 반영.
+/// POLL_INTERVAL마다 native(ETH) feed와 등록된 모든 quote feed를 **단일 batch
+/// 요청**으로 한 번에 가져와 인메모리 캐시(NATIVE_PRICE, QUOTE_PRICES)에 반영.
 ///
 /// 가격 fetch는 [`PriceProvider`] trait를 거치며, 이 abstraction은 observer
 /// 측과 동일한 형태(`provider/{mod,pyth,mock}.rs`)로 정렬되어 있어 두
