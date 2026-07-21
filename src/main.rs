@@ -18,9 +18,6 @@ async fn main() -> anyhow::Result<()> {
         .with_max_level(tracing::Level::INFO)
         .init();
 
-    // 서버 인스턴스 ID 초기화 (UUID 생성)
-    websocket_server::config::init_instance_id();
-
     //DB INIT
     {
         PostgresDatabase::init().await.unwrap();
