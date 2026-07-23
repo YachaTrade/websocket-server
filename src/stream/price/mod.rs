@@ -41,19 +41,18 @@ lazy_static! {
 const NATIVE_FEED_ID: &str =
     "0xff61491a931112ddf1bd8147cd1b641375f79f5825126d665480874634fd0ace";
 
-/// Polling cadence — 10s, observer 의 NORMALIZE_WINDOW_SECS 와 동일.
+/// Polling cadence — 30s.
 ///
-/// 이전엔 1초 였는데, observer 와 같은 egress IP 를 공유하는 환경에서
-/// 두 서비스가 합쳐 Pyth Hermes 의 30 req/10s 한도를 자주 넘겨 429 가
-/// 발생함. observer 가 10s bucketing 으로 부하 절반 줄였으니
-/// websocket-server 도 같은 cadence 로 맞춰서 합산 부하가 한도 안에
-/// 들어오게 함.
+/// observer 와 같은 egress IP 를 공유하는 환경에서 두 서비스가 합쳐
+/// Pyth Hermes 의 30 req/10s 한도를 자주 넘겨 429 가 발생함. 콜 빈도를
+/// 단계적으로 낮춰 (1s → 10s → 30s) websocket-server 측 부하를 최소로
+/// 줄여 합산 부하가 한도 안에 넉넉히 들어오게 함.
 ///
-/// 트레이드오프: live UI 의 USD 가격 freshness 가 1s → 10s 로 늘어남.
+/// 트레이드오프: live UI 의 USD 가격 freshness 가 30s 로 늘어남.
 /// quote 토큰 가격은 분 단위로 크게 변하지 않으니 일반적인 거래 화면에는
 /// 무시할 수 있는 수준. 더 빠른 freshness 가 필요해지면 observer 의
 /// rate limiter 와 함께 다시 조정.
-const POLL_INTERVAL: Duration = Duration::from_secs(10);
+const POLL_INTERVAL: Duration = Duration::from_secs(30);
 /// 에러 시 다음 retry까지 대기 시간 (provider 내부 backoff에 더해 최후 안전망).
 const ERROR_BACKOFF: Duration = Duration::from_secs(2);
 
