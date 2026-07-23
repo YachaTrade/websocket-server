@@ -1,0 +1,11 @@
+# sqlx query! 매크로를 컴파일 타임 DB 접속 없이 커밋된 .sqlx/ 캐시로 검증한다.
+#
+# 이 설정이 없으면 빌드 시 sqlx 가 DATABASE_URL 로 DB 에 접속해 query! 매크로마다
+# 커넥션을 열고, Postgres 슬롯을 소진해 "sorry, too many clients already" 로 실패한다.
+# (런타임이 아니라 컴파일 타임 에러다. Postgres max_connections 문제가 아니다.)
+#
+# 쿼리를 추가/변경하면 온라인으로 캐시를 갱신할 것:
+#   DATABASE_URL=postgres://... cargo sqlx prepare
+# non-forced 라서 위처럼 명시적으로 override 하면 online prepare 가 정상 동작한다.
+[env]
+SQLX_OFFLINE = "true"
