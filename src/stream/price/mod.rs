@@ -41,18 +41,22 @@ lazy_static! {
 const NATIVE_FEED_ID: &str =
     "0xff61491a931112ddf1bd8147cd1b641375f79f5825126d665480874634fd0ace";
 
-/// Polling cadence — 30s.
+/// Pyth 요청 주기 — 벽시계가 아니라 **블록 진행** 기준. 마지막 요청 이후
+/// 체인이 이만큼 블록을 진행하면 다음 Pyth 요청을 낸다. giwa 는 ~1s/block
+/// 이라 100블록 ≈ 100s. 블록에 맞추므로 체인이 한산해 블록이 느려지면
+/// Pyth 콜도 자연히 줄어든다 (거래가 없으면 신선한 가격도 불필요).
 ///
-/// observer 와 같은 egress IP 를 공유하는 환경에서 두 서비스가 합쳐
-/// Pyth Hermes 의 30 req/10s 한도를 자주 넘겨 429 가 발생함. 콜 빈도를
-/// 단계적으로 낮춰 (1s → 10s → 30s) websocket-server 측 부하를 최소로
-/// 줄여 합산 부하가 한도 안에 넉넉히 들어오게 함.
-///
-/// 트레이드오프: live UI 의 USD 가격 freshness 가 30s 로 늘어남.
-/// quote 토큰 가격은 분 단위로 크게 변하지 않으니 일반적인 거래 화면에는
-/// 무시할 수 있는 수준. 더 빠른 freshness 가 필요해지면 observer 의
-/// rate limiter 와 함께 다시 조정.
-const POLL_INTERVAL: Duration = Duration::from_secs(30);
+/// observer 와 egress IP 를 공유해 합산 Pyth 부하가 30 req/10s 한도를
+/// 넘기던 이력(1s → 10s → 30s → 블록 기반)의 연장선 — ws-server 부하를 더
+/// 낮춤. 트레이드오프: USD 가격 freshness 가 ~100s 로 늘어남 (quote 토큰은
+/// 느리게 움직여 일반 거래 화면엔 무시 가능). align_pyth_ts(10s 버킷)은
+/// 그대로라 observer 와 같은 timestamp 를 질의하는 성질은 유지된다.
+const BLOCKS_PER_POLL: u64 = 100;
+
+/// 블록 높이 확인 주기. 이 간격으로 (저렴한) eth_blockNumber 를 폴링해
+/// [`BLOCKS_PER_POLL`] 도달 여부만 확인하고, 도달했을 때만 Pyth 를 호출한다.
+/// Pyth 호출 주기가 아니라 게이트 확인 주기다.
+const BLOCK_CHECK_INTERVAL: Duration = Duration::from_secs(10);
 /// 에러 시 다음 retry까지 대기 시간 (provider 내부 backoff에 더해 최후 안전망).
 const ERROR_BACKOFF: Duration = Duration::from_secs(2);
 
@@ -134,10 +138,21 @@ async fn pyth_query_ts(client: &RpcClient) -> Result<u64> {
     Ok(align_pyth_ts(ts))
 }
 
+/// 마지막으로 Pyth 를 조회한 블록(`last_polled`) 대비 `latest` 가
+/// [`BLOCKS_PER_POLL`] 이상 진행됐는지 판정. 첫 조회(None)면 즉시 true.
+/// 재조직/후퇴로 latest < last_polled 여도 saturating_sub → 0 → false.
+fn should_poll(latest: u64, last_polled: Option<u64>) -> bool {
+    match last_polled {
+        None => true,
+        Some(prev) => latest.saturating_sub(prev) >= BLOCKS_PER_POLL,
+    }
+}
+
 /// Native + Quote Price 업데이트 시작.
 ///
-/// POLL_INTERVAL마다 native(ETH) feed와 등록된 모든 quote feed를 **단일 batch
-/// 요청**으로 한 번에 가져와 인메모리 캐시(NATIVE_PRICE, QUOTE_PRICES)에 반영.
+/// 체인이 [`BLOCKS_PER_POLL`] 만큼 진행할 때마다 native(ETH) feed와 등록된 모든
+/// quote feed를 **단일 batch 요청**으로 한 번에 가져와 인메모리 캐시
+/// (NATIVE_PRICE, QUOTE_PRICES)에 반영.
 ///
 /// 가격 fetch는 [`PriceProvider`] trait를 거치며, 이 abstraction은 observer
 /// 측과 동일한 형태(`provider/{mod,pyth,mock}.rs`)로 정렬되어 있어 두
@@ -148,9 +163,31 @@ pub async fn start_update_price() -> Result<()> {
     let client = RpcClient::instance().context("RpcClient not initialized")?;
 
     tokio::spawn(async move {
-        info!("🚀 Price monitor started (Pyth batch fetch)");
+        info!(
+            "🚀 Price monitor started (Pyth batch fetch, every {} blocks)",
+            BLOCKS_PER_POLL
+        );
+
+        // 마지막으로 Pyth 를 조회한 블록 높이. None 이면 아직 한 번도 안 함.
+        let mut last_polled: Option<u64> = None;
 
         loop {
+            // 최신 블록 높이만 저렴하게 확인 (Pyth 아님, giwa 노드 eth_blockNumber).
+            let latest = match client.get_latest_block_number().await {
+                Ok(b) => b,
+                Err(e) => {
+                    error!("❌ Failed to get latest block for Pyth gate: {}", e);
+                    tokio::time::sleep(ERROR_BACKOFF).await;
+                    continue;
+                }
+            };
+
+            // 마지막 요청 이후 BLOCKS_PER_POLL 만큼 진행하지 않았으면 대기 후 재확인.
+            if !should_poll(latest, last_polled) {
+                tokio::time::sleep(BLOCK_CHECK_INTERVAL).await;
+                continue;
+            }
+
             // 모든 등록된 feed_id 수집 (native + quote tokens).
             let mut feed_ids: Vec<String> = vec![NATIVE_FEED_ID.to_string()];
             for entry in QUOTE_FEED_IDS.iter() {
@@ -200,9 +237,13 @@ pub async fn start_update_price() -> Result<()> {
                         }
                     }
 
-                    tokio::time::sleep(POLL_INTERVAL).await;
+                    // 이번 요청 성공 → 기준 블록 갱신. 다음 요청은 여기서
+                    // BLOCKS_PER_POLL 만큼 더 진행한 뒤에 나간다.
+                    last_polled = Some(latest);
+                    tokio::time::sleep(BLOCK_CHECK_INTERVAL).await;
                 }
                 Err(e) => {
+                    // last_polled 를 갱신하지 않아 다음 확인에서 곧바로 재시도.
                     error!("❌ Batch price fetch failed: {}", e);
                     tokio::time::sleep(ERROR_BACKOFF).await;
                 }
@@ -227,5 +268,31 @@ mod pyth_ts_tests {
         assert_eq!(align_pyth_ts(1_013), 1_010); // 1010 → 1010 (경계)
         assert_eq!(align_pyth_ts(1_012), 1_000); // 1009 → 1000
         assert_eq!(align_pyth_ts(2), 0); // underflow는 saturating
+    }
+}
+
+#[cfg(test)]
+mod should_poll_tests {
+    use super::should_poll;
+
+    // 의도: 첫 조회는 즉시, 이후엔 정확히 BLOCKS_PER_POLL(100) 블록이 진행됐을
+    // 때만 Pyth 요청. 이 100블록 경계가 곧 Pyth 콜 빈도(≈ 가격 freshness)이자
+    // 429 안전 마진이라, 경계·후퇴 케이스를 못 박아 로직이 흔들리면 깨지게 한다.
+    #[test]
+    fn first_poll_fires_immediately() {
+        assert!(should_poll(12_345, None));
+    }
+
+    #[test]
+    fn fires_only_after_100_blocks() {
+        assert!(!should_poll(1_099, Some(1_000))); // 99블록 진행 → 아직 아님
+        assert!(should_poll(1_100, Some(1_000))); // 정확히 100블록 → 요청
+        assert!(should_poll(1_250, Some(1_000))); // 100블록 초과 → 요청
+    }
+
+    #[test]
+    fn backward_jump_does_not_fire() {
+        // 재조직/후퇴로 latest < last_polled 여도 saturating_sub → 0 → false.
+        assert!(!should_poll(500, Some(1_000)));
     }
 }
