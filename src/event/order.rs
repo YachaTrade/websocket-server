@@ -170,10 +170,7 @@ impl OrderEventProducer {
                         }
 
                         // native(quote) 금액이 최소 금액 미만이면 latest_trade push 하지 않음
-                        if !meets_order_latest_trade_min_amount(
-                            &buy.amount_in,
-                            market_info.quote_info.decimals,
-                        ) {
+                        if !meets_order_latest_trade_min_amount(&buy.amount_in) {
                             info!(
                                 "latest_trade below min amount, skip: token={}, amount_in={}",
                                 buy.token, buy.amount_in
@@ -227,10 +224,7 @@ impl OrderEventProducer {
                         }
 
                         // native(quote) 금액이 최소 금액 미만이면 latest_trade push 하지 않음
-                        if !meets_order_latest_trade_min_amount(
-                            &sell.amount_out,
-                            market_info.quote_info.decimals,
-                        ) {
+                        if !meets_order_latest_trade_min_amount(&sell.amount_out) {
                             info!(
                                 "latest_trade below min amount, skip: token={}, amount_out={}",
                                 sell.token, sell.amount_out
@@ -302,10 +296,7 @@ impl OrderEventProducer {
                     }
 
                     // native(quote) 금액이 최소 금액 미만이면 latest_trade push 하지 않음
-                    if !meets_order_latest_trade_min_amount(
-                        &buy.amount_in,
-                        market_info.quote_info.decimals,
-                    ) {
+                    if !meets_order_latest_trade_min_amount(&buy.amount_in) {
                         info!(
                             "latest_trade below min amount, skip: token={}, amount_in={}",
                             buy.token, buy.amount_in
@@ -359,10 +350,7 @@ impl OrderEventProducer {
                     }
 
                     // native(quote) 금액이 최소 금액 미만이면 latest_trade push 하지 않음
-                    if !meets_order_latest_trade_min_amount(
-                        &sell.amount_out,
-                        market_info.quote_info.decimals,
-                    ) {
+                    if !meets_order_latest_trade_min_amount(&sell.amount_out) {
                         info!(
                             "latest_trade below min amount, skip: token={}, amount_out={}",
                             sell.token, sell.amount_out

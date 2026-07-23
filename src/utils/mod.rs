@@ -8,17 +8,13 @@ mod test;
 
 pub mod retry;
 
-/// 거래 quote 측 금액이 order_latest_trade(LatestTrade) push 최소 금액 이상인지 판단한다.
+/// 거래 quote 측 금액이 order_latest_trade(LatestTrade) push 최소 금액(10 wei) 이상인지 판단한다.
 ///
-/// 최소 금액 = quote 토큰 1개의 10%(0.1) = `0.1 × 10^quote_decimals` (raw 기준).
-/// 예) 18 decimals → 1e17, 6 decimals → 1e5. 임계값을 quote_decimals로 스케일하므로
-/// WETH(18)이 아닌 quote 토큰 마켓에서도 정상 거래가 잘못 차단되지 않는다.
+/// decimals와 무관한 flat raw 임계값(10 wei) — dust/0 금액 거래만 걸러내고 나머지는 전부 push.
+/// (이전엔 quote 토큰의 10%(0.1)로 스케일했으나, 사실상 필터를 끄기 위해 10 wei로 낮췄다.)
 /// buy 는 amount_in, sell 은 amount_out 이 quote 측 금액이다.
-pub fn meets_order_latest_trade_min_amount(amount: &BigDecimal, quote_decimals: i32) -> bool {
-    // 0.1 × 10^decimals == 10^(decimals - 1)
-    let min_amount = BigDecimal::from_str(&format!("1e{}", quote_decimals - 1))
-        .expect("power-of-ten min amount is always a valid BigDecimal");
-    amount >= &min_amount
+pub fn meets_order_latest_trade_min_amount(amount: &BigDecimal) -> bool {
+    amount >= &BigDecimal::from(10)
 }
 
 pub fn convert_chart_timestamp(timestamp: i64, interval: &str) -> i64 {

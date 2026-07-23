@@ -252,35 +252,36 @@ mod test {
         }
     }
 
-    // order_latest_trade 최소 금액 필터: quote 토큰 1개의 10%(0.1) = 0.1 × 10^quote_decimals raw 이상일 때만 push.
-    // 임계값을 quote_decimals로 스케일하여 non-18-decimal quote 마켓도 올바르게 동작해야 한다.
+    // order_latest_trade 최소 금액 필터: quote 측 금액이 10 wei 이상일 때만 push.
+    // decimals와 무관한 flat 임계값 — dust(<10 wei)와 0만 걸러내고 나머지는 전부 push.
+    // (필터를 사실상 끄기 위해 기존 0.1-토큰 스케일에서 10 wei로 낮춤)
     #[test]
-    fn meets_min_amount_18_decimals_below_threshold() {
-        // 18 decimals → 임계값 1e17. 1e17 - 1 은 push 안 함
-        let amount = BigDecimal::from_str("99999999999999999").unwrap();
+    fn meets_min_amount_below_10wei_filtered() {
+        // 9 wei → 임계값 미만이므로 push 안 함
+        let amount = BigDecimal::from_str("9").unwrap();
         assert!(
-            !meets_order_latest_trade_min_amount(&amount, 18),
-            "18 decimals 임계값 미만은 push 대상이 아니어야 함"
+            !meets_order_latest_trade_min_amount(&amount),
+            "10 wei 미만은 push 대상이 아니어야 함"
         );
     }
 
     #[test]
-    fn meets_min_amount_18_decimals_at_threshold() {
-        // 정확히 1e17 (0.1 토큰) → 경계 포함(이상)이므로 push
-        let amount = BigDecimal::from_str("100000000000000000").unwrap();
+    fn meets_min_amount_at_10wei_pushes() {
+        // 정확히 10 wei → 경계 포함(이상)이므로 push
+        let amount = BigDecimal::from_str("10").unwrap();
         assert!(
-            meets_order_latest_trade_min_amount(&amount, 18),
-            "18 decimals 임계값과 같으면 push 대상이어야 함"
+            meets_order_latest_trade_min_amount(&amount),
+            "10 wei(경계)는 push 대상이어야 함"
         );
     }
 
     #[test]
-    fn meets_min_amount_18_decimals_above_threshold() {
-        // 1e18 (1 토큰) → push
+    fn meets_min_amount_above_10wei_pushes() {
+        // 1e18 (1 ETH 규모) → push
         let amount = BigDecimal::from_str("1000000000000000000").unwrap();
         assert!(
-            meets_order_latest_trade_min_amount(&amount, 18),
-            "18 decimals 임계값 초과는 push 대상이어야 함"
+            meets_order_latest_trade_min_amount(&amount),
+            "10 wei 초과는 push 대상이어야 함"
         );
     }
 
@@ -288,31 +289,19 @@ mod test {
     fn meets_min_amount_returns_false_for_zero() {
         let amount = BigDecimal::from_str("0").unwrap();
         assert!(
-            !meets_order_latest_trade_min_amount(&amount, 18),
+            !meets_order_latest_trade_min_amount(&amount),
             "0 금액은 push 대상이 아니어야 함"
         );
     }
 
     #[test]
-    fn meets_min_amount_6_decimals_scales_threshold() {
-        // 6 decimals quote → 임계값 = 0.1 × 10^6 = 100000 (0.1 토큰)
-        // 1 토큰(1_000_000) → push
-        let one_token = BigDecimal::from_str("1000000").unwrap();
+    fn meets_min_amount_is_decimals_independent() {
+        // 임계값이 decimals로 스케일되지 않는다. 예전 0.1-토큰 규칙이면 6-decimal 마켓에서
+        // 99999(0.1 토큰 미만)가 차단됐지만, 이제 10 wei만 넘으면 전부 push.
+        let small = BigDecimal::from_str("99999").unwrap();
         assert!(
-            meets_order_latest_trade_min_amount(&one_token, 6),
-            "6 decimals 1 토큰은 push 대상이어야 함"
-        );
-        // 정확히 0.1 토큰(100000) → 경계 포함이므로 push
-        let at_threshold = BigDecimal::from_str("100000").unwrap();
-        assert!(
-            meets_order_latest_trade_min_amount(&at_threshold, 6),
-            "6 decimals 0.1 토큰(경계)은 push 대상이어야 함"
-        );
-        // 0.1 토큰 미만(99999) → push 안 함. (하드코딩 1e17 이었다면 잘못 차단되던 케이스)
-        let below = BigDecimal::from_str("99999").unwrap();
-        assert!(
-            !meets_order_latest_trade_min_amount(&below, 6),
-            "6 decimals 0.1 토큰 미만은 push 대상이 아니어야 함"
+            meets_order_latest_trade_min_amount(&small),
+            "10 wei 이상이면 decimals와 무관하게 push 대상이어야 함"
         );
     }
 }
