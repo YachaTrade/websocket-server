@@ -5,3 +5,12 @@ deploy/
 .DS_Store
 graphify-out/
 .context/
+
+# AI agent tooling
+.claude/
+.superpowers/
+.omc/
+docs/superpowers/
+CLAUDE.md
+AGENTS.md
+docs/agents.md
